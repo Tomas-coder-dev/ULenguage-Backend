@@ -12,6 +12,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@google-cloud/translate": "^9.2.0",
+    "cors": "^2.8.5",
     "express": "^5.1.0",
     "franc": "^6.2.0",
     "multer": "^2.0.2",
