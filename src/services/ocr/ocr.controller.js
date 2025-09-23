@@ -1,20 +1,16 @@
 const Tesseract = require('tesseract.js');
-const franc = require('franc');
+const franc = require('franc').franc;
 const sharp = require('sharp');
 const fs = require('fs');
+
+// IMPORTA LAS LISTAS DESDE wordlists.js
+const { QUECHUA_WORDS, ENGLISH_WORDS } = require('./wordlists');
 
 const SUPPORTED_LANGUAGES = {
   que: "Quechua",
   spa: "Español",
   eng: "Inglés"
 };
-
-// Palabras clave propias del quechua para heurística
-const QUECHUA_WORDS = [
-  'llaqta', 'tayta', 'sapa', 'kashani', 'amauta', 'wasi', 'munay', 'kanki', 'qosqo',
-  'apu', 'wasiyki', 'llakikuy', 'yachay', 'sonqoy', 'kuyay', 'qhapaq', 'sumaq',
-  'riqsiy', 'mikhuy', 'tinkuy', 'llankay', 'llamk', 'qelqa', 'tupay', 'yachachiq'
-];
 
 exports.extractText = async (req, res) => {
   try {
@@ -75,17 +71,18 @@ exports.extractTextAutoLang = async (req, res) => {
       }
     );
 
-    // Limpieza avanzada del texto para mejorar la detección
+    // Limpieza avanzada del texto para mejor detección
     const cleanText = text
-      .normalize('NFD') // quita tildes
+      .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[\n\r]+/g, ' ')
-      .replace(/[^\w\s]/g, '')
+      .replace(/[^a-zA-Z\s]/g, '')
       .toLowerCase()
       .trim();
 
-    // Heurística: contar palabras clave de quechua
+    // Heurística usando las listas externas
     const quechuaWordsCount = QUECHUA_WORDS.filter(w => cleanText.includes(w)).length;
+    const englishWordsCount = ENGLISH_WORDS.filter(w => cleanText.includes(w)).length;
 
     let detectedLang = 'und';
     let francResults = [];
@@ -93,21 +90,19 @@ exports.extractTextAutoLang = async (req, res) => {
     const only = ['que', 'spa', 'eng'];
 
     if (cleanText.length >= 20) {
-      francResults = franc.all(cleanText, { only });
+      const francLang = franc(cleanText, { only });
+      francResults = francLang ? [[francLang, 1]] : [];
 
-      // Si hay suficientes palabras quechua, forzar a quechua
+      // Heurística: Forzar Quechua o Inglés si hay suficientes palabras clave
       if (quechuaWordsCount >= 2) {
         detectedLang = 'que';
         confidenceMsg = "Detectadas varias palabras quechua, forzando idioma Quechua.";
+      } else if (englishWordsCount >= 2) {
+        detectedLang = 'eng';
+        confidenceMsg = "Detectadas varias palabras en inglés, forzando idioma Inglés.";
       } else {
-        detectedLang = francResults[0][0];
-        // Advierte si la detección no es confiable
-        if (francResults.length > 1) {
-          const diff = francResults[0][1] - francResults[1][1];
-          if (francResults[0][1] < 0.5 || diff < 0.13) {
-            confidenceMsg = "Advertencia: la detección de idioma es poco confiable.";
-          }
-        }
+        detectedLang = francLang || 'und';
+        // En la versión moderna de franc no hay puntaje/ranking
       }
     } else {
       confidenceMsg = "Texto demasiado corto para detectar idioma de forma confiable.";
@@ -139,7 +134,8 @@ exports.extractTextAutoLang = async (req, res) => {
         score
       })),
       confidenceMsg,
-      quechuaWordsCount
+      quechuaWordsCount,
+      englishWordsCount
     });
   } catch (error) {
     res.status(500).json({ error: "OCR processing failed.", details: error.message });
