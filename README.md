@@ -1,44 +1,30 @@
-# 🌟 ULenguage Backend - Sprint 1# ULenguage Backend ���
+# 🌟 ULenguage Backend
 
+<div align="center">
 
+**Plataforma de traducción quechua para turistas en Cusco**
 
-<div align="center">Backend de ULenguage - Traductor quechua para turistas en Cusco.
+![ULenguage Logo](https://via.placeholder.com/200x80/4A90E2/FFFFFF?text=ULenguage)
 
-
-
-![ULenguage Logo](https://via.placeholder.com/200x80/4A90E2/FFFFFF?text=ULenguage)## �� Stack
-
-- Node.js + Express
-
-**Plataforma de traducción quechua para turistas en Cusco**- MongoDB + Mongoose
-
-- JWT
-
-[![Node.js](https://img.shields.io/badge/Node.js-16+-green.svg)](https://nodejs.org/)- Google OAuth (próximamente)
-
+[![Node.js](https://img.shields.io/badge/Node.js-16+-green.svg)](https://nodejs.org/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-5.0+-green.svg)](https://www.mongodb.com/)
-
-[![Express.js](https://img.shields.io/badge/Express.js-5.1.0-blue.svg)](https://expressjs.com/)## ▶️ Uso local
-
-[![Coverage](https://img.shields.io/badge/coverage-70%25-brightgreen.svg)](https://github.com/Tomas-coder-dev/ULenguage-Backend)```bash
-
+[![Express.js](https://img.shields.io/badge/Express.js-5.1.0-blue.svg)](https://expressjs.com/)
+[![Coverage](https://img.shields.io/badge/coverage-70%25-brightgreen.svg)](https://github.com/Tomas-coder-dev/ULenguage-Backend)
 [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
 
 </div>
 
-```
-
 ## 📖 Descripción
 
-## ��� Tests
+ULenguage Backend es el servidor que alimenta la aplicación de traducción quechua-español-inglés diseñada para turistas que visitan Cusco, Perú. Este backend incluye autenticación JWT, gestión de planes, procesamiento OCR para reconocimiento de texto en imágenes, y una base de datos sembrada con contenido cultural quechua auténtico.
 
-ULenguage Backend es el servidor que alimenta la aplicación de traducción quechua-español-inglés diseñada para turistas que visitan Cusco, Perú. Este Sprint 1 establece las bases con autenticación JWT, gestión de planes y una base de datos sembrada con contenido cultural quechua auténtico.
-
-## ✨ Características del Sprint 1
+## ✨ Características implementadas
 
 - 🔐 **Autenticación JWT completa** (registro y login)
-- 📚 **Documentación Swagger** interactiva
-- 📊 **Gestión de planes** (Gratuito y Premium) Pronto en `/api/docs`
+- � **OCR con Tesseract.js** (reconocimiento de texto en imágenes)
+- 🤖 **Detección automática de idioma** (Quechua, Español, Inglés)
+- �📚 **Documentación Swagger** interactiva en `/api/docs`
+- 📊 **Gestión de planes** (Gratuito y Premium)
 - 🌱 **Seeders con 50+ términos quechua** culturalmente auténticos
 - 🧪 **Tests unitarios** con cobertura ≥70%
 - 🔒 **Seguridad robusta** con bcryptjs y CORS
@@ -82,12 +68,28 @@ npm start    # Producción
 
 ## 📡 Endpoints API
 
+### Autenticación
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
 | POST | `/api/auth/register` | Registro de usuario |
 | POST | `/api/auth/login` | Inicio de sesión |
+
+### Planes y Contenido
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
 | GET | `/api/planes` | Listar planes disponibles |
 | POST | `/api/seed` | Ejecutar seeders |
+
+### OCR y Traducción
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| POST | `/api/ocr/extract-text` | OCR con idioma específico (`?lang=spa\|eng\|que`) |
+| POST | `/api/ocr/extract-text-auto` | OCR con detección automática |
+| POST | `/api/translate` | Traducir texto |
+
+### Documentación
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
 | GET | `/api/docs` | Swagger UI interactivo |
 
 ## 🧪 Testing
@@ -174,6 +176,37 @@ Accede a la documentación interactiva en: `http://localhost:5000/api/docs`
 - **Andrés** - Backend Developer  
 - **Fabricio** - Backend Developer
 - **Institución**: [Tecsup](https://www.tecsup.edu.pe/)
+
+## � Funcionalidades OCR
+
+### Endpoints OCR
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| POST | `/api/ocr/extract-text` | OCR con idioma específico (`?lang=spa\|eng\|que`) |
+| POST | `/api/ocr/extract-text-auto` | OCR con detección automática de idioma |
+| POST | `/api/translate` | Traducir texto (Quechua ↔ Español/Inglés) |
+
+### Configuración OCR
+
+- **Tesseract.js** para reconocimiento óptico de caracteres
+- **Sharp** para procesamiento de imágenes
+- **Franc** para detección automática de idioma
+- **Archivos .traineddata** para Quechua, Español e Inglés
+
+### Uso de OCR
+
+```bash
+# Extraer texto con idioma específico
+POST /api/ocr/extract-text?lang=que
+Content-Type: multipart/form-data
+Body: image=archivo_imagen.jpg
+
+# Detección automática de idioma
+POST /api/ocr/extract-text-auto
+Content-Type: multipart/form-data
+Body: image=archivo_imagen.jpg
+```
 
 ## 📄 Licencia
 

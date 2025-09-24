@@ -16,10 +16,11 @@ const register = async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      plan: user.plan,
       token: generateToken(user._id),
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(400).json({ message: error.message });
   }
 };
 
