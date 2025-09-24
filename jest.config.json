@@ -16,5 +16,11 @@
   },
   "testMatch": [
     "**/tests/**/*.test.js"
-  ]
+  ],
+  "transformIgnorePatterns": [
+    "node_modules/(?!(franc|trigram-utils)/)"
+  ],
+  "moduleNameMapper": {
+    "^franc$": "<rootDir>/tests/__mocks__/franc.js"
+  }
 }

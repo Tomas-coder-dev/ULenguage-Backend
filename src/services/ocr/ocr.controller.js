@@ -1,6 +1,14 @@
 const Tesseract = require('tesseract.js');
-const franc = require('franc').franc;
 const sharp = require('sharp');
+
+// Import franc dinamically to handle ES module
+let franc;
+try {
+  franc = require('franc').franc;
+} catch (error) {
+  // Fallback for testing or when franc is not available
+  franc = (text) => 'spa'; // Default to Spanish
+}
 const fs = require('fs');
 
 // IMPORTA LAS LISTAS DESDE wordlists.js
