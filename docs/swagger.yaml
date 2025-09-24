@@ -1,0 +1,279 @@
+openapi: 3.0.0
+info:
+  title: ULenguage Backend API
+  version: 1.0.0
+  description: API para traducción quechua - turistas en Cusco
+  contact:
+    name: Equipo ULenguage
+    email: soporte@ulenguage.com
+servers:
+  - url: http://localhost:5000
+    description: Servidor local de desarrollo
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d21b4667d0d8992e610c85"
+        name:
+          type: string
+          example: "Ana García"
+        email:
+          type: string
+          format: email
+          example: "ana@mail.com"
+        plan:
+          type: string
+          enum: [free, premium]
+          example: "free"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    UserAuth:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d21b4667d0d8992e610c85"
+        name:
+          type: string
+          example: "Ana García"
+        email:
+          type: string
+          format: email
+          example: "ana@mail.com"
+        plan:
+          type: string
+          enum: [free, premium]
+          example: "free"
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    
+    Plan:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+          example: "Premium"
+        description:
+          type: string
+          example: "Plan completo para exploradores culturales"
+        price:
+          type: number
+          example: 5.99
+        features:
+          type: array
+          items:
+            type: string
+          example: ["OCR ilimitado", "Audio pronunciación", "Sin anuncios"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    Content:
+      type: object
+      properties:
+        _id:
+          type: string
+        term:
+          type: string
+          example: "Allin p'unchay"
+        translationEs:
+          type: string
+          example: "Buenos días"
+        translationEn:
+          type: string
+          example: "Good morning"
+        context:
+          type: string
+          example: "Se usa hasta el mediodía en comunidades rurales"
+        pronunciation:
+          type: string
+          example: "AH-lyeen POON-chay"
+        category:
+          type: string
+          example: "saludos"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Error interno del servidor"
+
+tags:
+  - name: auth
+    description: Endpoints de autenticación
+  - name: plans
+    description: Gestión de planes de suscripción
+  - name: content
+    description: Contenido cultural quechua
+  - name: seed
+    description: Población de datos iniciales
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [auth]
+      summary: Registro de usuario
+      description: Crear una nueva cuenta de usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+              properties:
+                name:
+                  type: string
+                  example: "Ana García"
+                email:
+                  type: string
+                  format: email
+                  example: "ana@mail.com"
+                password:
+                  type: string
+                  minLength: 6
+                  example: "123456"
+      responses:
+        '201':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAuth'
+        '400':
+          description: Usuario ya existe o datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Inicio de sesión
+      description: Autenticar usuario con email y contraseña
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "ana@mail.com"
+                password:
+                  type: string
+                  example: "123456"
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAuth'
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/planes:
+    get:
+      tags: [plans]
+      summary: Listar planes disponibles
+      description: Obtener todos los planes de suscripción
+      responses:
+        '200':
+          description: Lista de planes obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plan'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/seed:
+    post:
+      tags: [seed]
+      summary: Ejecutar seeders
+      description: Poblar la base de datos con datos iniciales (planes y contenido cultural)
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Seeders ejecutados exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Seeders ejecutados correctamente"
+                  success:
+                    type: boolean
+                    example: true
+                  timestamp:
+                    type: string
+                    format: date-time
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
