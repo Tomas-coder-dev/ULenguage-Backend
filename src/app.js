@@ -9,6 +9,8 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const planRoutes = require('./routes/planRoutes');
 const seedRoutes = require('./routes/seedRoutes');
+const ocrRoutes = require('./services/ocr/ocr.routes');
+const translateRoutes = require('./services/translate/translate.routes');
 
 dotenv.config();
 connectDB();
@@ -26,6 +28,8 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/planes', planRoutes);
 app.use('/api/seed', seedRoutes);
+app.use('/api/ocr', ocrRoutes);
+app.use('/api/translate', translateRoutes);
 
 // Swagger documentation
 try {
@@ -44,6 +48,8 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       planes: '/api/planes',
       seed: '/api/seed',
+      ocr: '/api/ocr',
+      translate: '/api/translate',
       docs: '/api/docs'
     }
   });

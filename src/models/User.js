@@ -4,8 +4,12 @@ const bcrypt = require('bcryptjs');
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String },
-  googleId: { type: String },
+  password: { 
+    type: String,
+    required: true,
+    minlength: [6, 'Contraseña debe tener ≥ 6 caracteres']
+  },
+  //googleId: { type: String },
   plan: { type: String, enum: ['free', 'premium'], default: 'free' },
 }, { timestamps: true });
 

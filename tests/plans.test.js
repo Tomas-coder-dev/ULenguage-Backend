@@ -4,7 +4,7 @@ const app = require('../src/app');
 const Plan = require('../src/models/Plan');
 
 beforeAll(async () => {
-  const url = process.env.MONGO_URI || 'mongodb://localhost:27017/ulenguage_test';
+  const url = process.env.MONGO_URI_TEST || 'mongodb://localhost:27017/ulenguage_test';
   await mongoose.connect(url);
 });
 
@@ -12,7 +12,7 @@ beforeEach(async () => {
   await Plan.deleteMany({});
   
   // Crear planes de prueba
-  await Plan.create([
+  const plans = await Plan.create([
     {
       name: "Gratuito",
       description: "Plan básico",
@@ -26,6 +26,9 @@ beforeEach(async () => {
       features: ["OCR ilimitado", "Audio pronunciación", "Sin anuncios"]
     }
   ]);
+  
+  // Pequeña pausa para asegurar inserción
+  await new Promise(resolve => setTimeout(resolve, 100));
 });
 
 afterAll(async () => {

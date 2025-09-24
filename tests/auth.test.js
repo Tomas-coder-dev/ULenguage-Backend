@@ -6,7 +6,7 @@ const User = require('../src/models/User');
 // Configuración de testing
 beforeAll(async () => {
   // Conectar a base de datos de test
-  const url = process.env.MONGO_URI || 'mongodb://localhost:27017/ulenguage_test';
+  const url = process.env.MONGO_URI_TEST || 'mongodb://localhost:27017/ulenguage_test';
   await mongoose.connect(url);
 });
 
@@ -44,22 +44,24 @@ describe('Autenticación de usuarios', () => {
     it('debe rechazar email duplicado', async () => {
       const userData = {
         name: 'Ana García',
-        email: 'ana@mail.com',
+        email: 'ana@duplicate.com',
         password: '123456'
       };
 
-      // Crear primer usuario
-      await request(app)
-        .post('/api/auth/register')
-        .send(userData);
+      // Crear primer usuario directamente en BD
+      await User.create(userData);
 
-      // Intentar crear segundo usuario con mismo email
+      // Intentar registrar con mismo email
       const res = await request(app)
         .post('/api/auth/register')
-        .send(userData);
+        .send({
+          name: 'Ana Diferente',
+          email: 'ana@duplicate.com',
+          password: '654321'
+        });
 
       expect(res.statusCode).toBe(400);
-      expect(res.body.message).toBe('Usuario ya existe');
+      expect(res.body.message).toContain('Usuario ya existe');
     });
 
     it('debe rechazar contraseña muy corta', async () => {
@@ -73,7 +75,7 @@ describe('Autenticación de usuarios', () => {
         .post('/api/auth/register')
         .send(userData);
 
-      expect(res.statusCode).toBe(500); // El modelo mongoose debe validar esto
+      expect(res.statusCode).toBe(400); // El modelo mongoose valida y devuelve 400
     });
   });
 

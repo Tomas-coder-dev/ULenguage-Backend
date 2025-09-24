@@ -1,0 +1,4 @@
+# Carpeta para uploads temporales de OCR
+
+Esta carpeta almacena temporalmente las imágenes subidas para procesamiento OCR.
+Los archivos se eliminan automáticamente después del procesamiento.

@@ -1,7 +1,7 @@
 {
   "name": "ulenguage-backend",
   "version": "1.0.0",
-  "description": "Backend de ULenguage - Traducción quechua para turistas",
+  "description": "Backend de ULenguage - Traducción quechua para turistas con OCR",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -17,7 +17,9 @@
     "quechua",
     "ocr",
     "turismo",
-    "cusco"
+    "cusco",
+    "traduccion",
+    "tesseract"
   ],
   "author": "Andres & Fabricio - Tecsup",
   "license": "ISC",
@@ -27,13 +29,18 @@
   },
   "homepage": "https://github.com/Tomas-coder-dev/ULenguage-Backend#readme",
   "dependencies": {
+    "@google-cloud/translate": "^9.2.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
+    "franc": "^6.2.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.2",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.4",
     "swagger-ui-express": "^5.0.1",
+    "tesseract.js": "^6.0.1",
     "yamljs": "^0.3.0"
   },
   "devDependencies": {
