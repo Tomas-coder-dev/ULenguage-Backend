@@ -9,6 +9,8 @@
 [![Node.js](https://img.shields.io/badge/Node.js-16+-green.svg)](https://nodejs.org/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-5.0+-green.svg)](https://www.mongodb.com/)
 [![Express.js](https://img.shields.io/badge/Express.js-5.1.0-blue.svg)](https://expressjs.com/)
+[![Google Gemini](https://img.shields.io/badge/Gemini-2.5-flash-yellow.svg)](https://ai.google.dev/)
+[![Google Vision](https://img.shields.io/badge/Google%20Vision-API-blue.svg)](https://cloud.google.com/vision)
 [![Coverage](https://img.shields.io/badge/coverage-70%25-brightgreen.svg)](https://github.com/Tomas-coder-dev/ULenguage-Backend)
 [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
 
@@ -16,14 +18,15 @@
 
 ## 📖 Descripción
 
-ULenguage Backend es el servidor que alimenta la aplicación de traducción quechua-español-inglés diseñada para turistas que visitan Cusco, Perú. Este backend incluye autenticación JWT, gestión de planes, procesamiento OCR para reconocimiento de texto en imágenes, y una base de datos sembrada con contenido cultural quechua auténtico.
+ULenguage Backend es el servidor que alimenta la aplicación de traducción quechua-español-inglés diseñada para turistas que visitan Cusco, Perú. Este backend incluye autenticación JWT, gestión de planes, procesamiento OCR para reconocimiento de texto en imágenes, explicación cultural automática usando Gemini AI, y una base de datos sembrada con contenido cultural quechua auténtico.
 
 ## ✨ Características implementadas
 
 - 🔐 **Autenticación JWT completa** (registro y login)
-- � **OCR con Tesseract.js** (reconocimiento de texto en imágenes)
-- 🤖 **Detección automática de idioma** (Quechua, Español, Inglés)
-- �📚 **Documentación Swagger** interactiva en `/api/docs`
+- 🖼️ **OCR con Google Vision API y Tesseract.js** (reconocimiento de texto y objetos en imágenes)
+- 🤖 **Explicación cultural automática** usando **Gemini 2.5 Flash**
+- 🌎 **Traducción automática** (Quechua, Español, Inglés, Inglés, etc.) con Google Translate
+- 📚 **Documentación Swagger** interactiva en `/api/docs`
 - 📊 **Gestión de planes** (Gratuito y Premium)
 - 🌱 **Seeders con 50+ términos quechua** culturalmente auténticos
 - 🧪 **Tests unitarios** con cobertura ≥70%
@@ -35,6 +38,8 @@ ULenguage Backend es el servidor que alimenta la aplicación de traducción quec
 
 - [Node.js](https://nodejs.org/) v16 o superior
 - [MongoDB](https://www.mongodb.com/) v5.0 o superior
+- [Google Cloud Service Account JSON](https://cloud.google.com/vision/docs/auth) para Vision API
+- Clave de API Gemini 2.5 Flash ([Google AI Studio](https://aistudio.google.com/app/apikey))
 
 ### 1. Clonar e instalar
 
@@ -48,16 +53,24 @@ npm install
 
 ```bash
 cp .env.example .env
-# Editar .env con tus valores
+# Edita .env con tus valores
+# GEMINI_API_KEY=tu_clave_gemini
+# GOOGLE_APPLICATION_CREDENTIALS=./ruta/service-account.json
 ```
 
-### 3. Sembrar base de datos
+### 3. Instalar dependencias IA
+
+```bash
+npm install @google-cloud/vision axios
+```
+
+### 4. Sembrar base de datos
 
 ```bash
 npm run seed
 ```
 
-### 4. Ejecutar servidor
+### 5. Ejecutar servidor
 
 ```bash
 npm run dev  # Desarrollo
@@ -80,10 +93,12 @@ npm start    # Producción
 | GET | `/api/planes` | Listar planes disponibles |
 | POST | `/api/seed` | Ejecutar seeders |
 
-### OCR y Traducción
+### OCR y Traducción con IA
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| POST | `/api/ocr/extract-text` | OCR con idioma específico (`?lang=spa\|eng\|que`) |
+| POST | `/api/ocr/analyze` | OCR + explicación cultural (Vision + Gemini). Permite elegir idioma con `targetLang` (ej: `qu`, `es`, `en`). |
+| POST | `/api/ocr/analyze-and-translate` | OCR + explicación cultural + traducción. Devuelve texto y explicación en idioma elegido. |
+| POST | `/api/ocr/extract-text` | OCR con idioma específico (`?lang=spa|eng|que`) |
 | POST | `/api/ocr/extract-text-auto` | OCR con detección automática |
 | POST | `/api/translate` | Traducir texto |
 
@@ -96,7 +111,7 @@ npm start    # Producción
 
 ```bash
 npm test                    # Ejecutar tests
-npm test -- --coverage     # Con cobertura
+npm test -- --coverage      # Con cobertura
 ```
 
 ## 🗃️ Modelos de datos
@@ -177,35 +192,43 @@ Accede a la documentación interactiva en: `http://localhost:5000/api/docs`
 - **Fabricio** - Backend Developer
 - **Institución**: [Tecsup](https://www.tecsup.edu.pe/)
 
-## � Funcionalidades OCR
+## 🖼️ Funcionalidades OCR Inteligente
 
-### Endpoints OCR
+### Endpoints OCR IA
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| POST | `/api/ocr/extract-text` | OCR con idioma específico (`?lang=spa\|eng\|que`) |
+| POST | `/api/ocr/analyze` | OCR + explicación cultural automática (Vision + Gemini). Recibe imagen y parámetro `targetLang` para idioma. |
+| POST | `/api/ocr/analyze-and-translate` | OCR + explicación + traducción (Vision + Gemini + Translate). |
+| POST | `/api/ocr/extract-text` | OCR con idioma específico (`?lang=spa|eng|que`) |
 | POST | `/api/ocr/extract-text-auto` | OCR con detección automática de idioma |
 | POST | `/api/translate` | Traducir texto (Quechua ↔ Español/Inglés) |
 
-### Configuración OCR
+### Configuración OCR + IA
 
-- **Tesseract.js** para reconocimiento óptico de caracteres
-- **Sharp** para procesamiento de imágenes
+- **Google Vision API** para OCR y detección de objetos/etiquetas en imágenes
+- **Gemini 2.5 Flash** para explicación cultural inteligente
+- **Google Translate API** para traducción automática
+- **Tesseract.js** para reconocimiento óptico de caracteres adicional
 - **Franc** para detección automática de idioma
 - **Archivos .traineddata** para Quechua, Español e Inglés
 
-### Uso de OCR
+### Ejemplo de uso OCR IA
 
 ```bash
-# Extraer texto con idioma específico
-POST /api/ocr/extract-text?lang=que
+# OCR + explicación cultural en idioma elegido
+POST /api/ocr/analyze
 Content-Type: multipart/form-data
-Body: image=archivo_imagen.jpg
+Body:
+  - image=archivo_imagen.jpg
+  - targetLang=qu   # Ejemplo para explicación en quechua
 
-# Detección automática de idioma
-POST /api/ocr/extract-text-auto
+# OCR + explicación + traducción
+POST /api/ocr/analyze-and-translate
 Content-Type: multipart/form-data
-Body: image=archivo_imagen.jpg
+Body:
+  - image=archivo_imagen.jpg
+  - targetLang=en   # Ejemplo para explicación y traducción en inglés
 ```
 
 ## 📄 Licencia
