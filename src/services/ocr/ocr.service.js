@@ -1,34 +1,55 @@
-const sharp = require('sharp');
-const Tesseract = require('tesseract.js');
-const fs = require('fs');
+const { analyzeImageWithVision } = require('./vision.service');
+const { getCulturalExplanation } = require('./gemini.service');
+const { translateTextGoogle } = require('../translate/translator'); // Mantienes tu traductor
 
 /**
- * Preprocesa la imagen para mejorar el OCR y luego extrae el texto.
- * @param {string} imagePath - Ruta temporal de la imagen recibida.
- * @param {string} lang - Idioma para Tesseract (por ej. 'eng', 'spa', 'que').
- * @returns {Promise<string>} - Texto extraído de la imagen.
+ * Procesa una imagen para obtener OCR y explicación cultural, con idioma elegible.
+ * @param {string} imagePath - Ruta de la imagen.
+ * @param {string} targetLang - Idioma destino para la explicación (ej: 'es', 'en', 'qu'). Default: 'es'
+ * @returns {Promise<object>}
  */
-exports.processImageAndExtractText = async (imagePath, lang = 'eng') => {
-  // Preprocesamiento de imagen: escala de grises, normalización, resize (opcional)
-  const processedPath = `${imagePath}_processed.png`;
+async function processImageForCulture(imagePath, targetLang = 'es') {
+  const { text, lang, labels } = await analyzeImageWithVision(imagePath);
+  let culturalExplanation = await getCulturalExplanation(text, labels);
 
-  await sharp(imagePath)
-    .grayscale()
-    .normalize()
-    //.resize(1024) // opcional: redimensionar si las imágenes suelen ser muy grandes
-    .toFile(processedPath);
+  // Traducir la explicación cultural si el idioma destino es distinto de español
+  if (targetLang && targetLang !== 'es') {
+    culturalExplanation = await translateTextGoogle(culturalExplanation, targetLang);
+  }
 
-  // OCR con Tesseract usando los archivos locales de idioma
-  const { data: { text } } = await Tesseract.recognize(
-    processedPath,
-    lang,
-    {
-      langPath: './tessdata'
-    }
-  );
+  return {
+    text,
+    detectedLang: lang,
+    labels,
+    culturalExplanation,
+    explanationLang: targetLang
+  };
+}
 
-  // Borra la imagen procesada
-  fs.unlinkSync(processedPath);
+/**
+ * Procesa, obtiene explicación y traduce tanto el texto como la explicación.
+ * @param {string} imagePath - Ruta de la imagen.
+ * @param {string} targetLang - Idioma destino para la traducción (ej: 'es', 'en', 'qu').
+ * @returns {Promise<object>}
+ */
+async function processAndTranslate(imagePath, targetLang = 'es') {
+    const { text, detectedLang, labels, culturalExplanation } = await processImageForCulture(imagePath, targetLang);
+    
+    // Traduce tanto el texto original como la explicación
+    const translatedText = await translateTextGoogle(text, targetLang);
+    // culturalExplanation ya está traducida si targetLang !== 'es' por la función anterior
+    // Pero si quieres aún forzar la traducción aquí, puedes hacerlo así:
+    const translatedExplanation = await translateTextGoogle(culturalExplanation, targetLang);
 
-  return text;
-};
+    return {
+        text,
+        detectedLang,
+        labels,
+        culturalExplanation, // Ya traducida si targetLang !== 'es'
+        translatedText,
+        translatedExplanation,
+        targetLang
+    };
+}
+
+module.exports = { processImageForCulture, processAndTranslate };

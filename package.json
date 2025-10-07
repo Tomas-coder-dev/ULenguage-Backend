@@ -30,6 +30,8 @@
   "homepage": "https://github.com/Tomas-coder-dev/ULenguage-Backend#readme",
   "dependencies": {
     "@google-cloud/translate": "^9.2.0",
+    "@google-cloud/vision": "^5.3.3",
+    "axios": "^1.12.2",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
