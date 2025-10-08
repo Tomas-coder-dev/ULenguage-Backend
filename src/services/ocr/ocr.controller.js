@@ -10,10 +10,10 @@ exports.analyzeAndExplain = async (req, res) => {
   }
 
   const imagePath = req.file.path;
-  const targetLang = req.body.targetLang || 'es'; // Idioma destino (español por defecto)
+  const targetLang = (req.body.targetLang || 'es').trim();
 
   try {
-    const result = await processImageForCulture(imagePath, targetLang); // <-- pásale el idioma aquí
+    const result = await processImageForCulture(imagePath, targetLang);
     res.json(result);
   } catch (error) {
     console.error("Error en analyzeAndExplain:", error);
@@ -24,7 +24,7 @@ exports.analyzeAndExplain = async (req, res) => {
 };
 
 /**
- * Endpoint que usa Google Vision, Gemini y el Traductor explícito (puede usarse si necesitas traducción extra).
+ * Endpoint que usa Google Vision, Gemini y el Traductor explícito.
  */
 exports.analyzeExplainAndTranslate = async (req, res) => {
     if (!req.file) {
@@ -32,7 +32,7 @@ exports.analyzeExplainAndTranslate = async (req, res) => {
     }
 
     const imagePath = req.file.path;
-    const targetLang = req.body.targetLang || 'es'; // Idioma destino desde el body
+    const targetLang = (req.body.targetLang || 'es').trim();
 
     try {
         const result = await processAndTranslate(imagePath, targetLang);

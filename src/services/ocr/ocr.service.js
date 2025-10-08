@@ -1,55 +1,46 @@
 const { analyzeImageWithVision } = require('./vision.service');
 const { getCulturalExplanation } = require('./gemini.service');
-const { translateTextGoogle } = require('../translate/translator'); // Mantienes tu traductor
+const { translateTextHybrid } = require('../translate/translator'); // usa el híbrido
 
 /**
- * Procesa una imagen para obtener OCR y explicación cultural, con idioma elegible.
+ * Procesa una imagen y devuelve arrays de textos, objetos, etiquetas y explicaciones culturales.
  * @param {string} imagePath - Ruta de la imagen.
- * @param {string} targetLang - Idioma destino para la explicación (ej: 'es', 'en', 'qu'). Default: 'es'
+ * @param {string} targetLang - Idioma destino (ej: 'es', 'en', 'qu')
  * @returns {Promise<object>}
  */
 async function processImageForCulture(imagePath, targetLang = 'es') {
-  const { text, lang, labels } = await analyzeImageWithVision(imagePath);
-  let culturalExplanation = await getCulturalExplanation(text, labels);
+  const { text, lang, labels, objects } = await analyzeImageWithVision(imagePath, [targetLang, 'es', 'qu', 'en']);
 
-  // Traducir la explicación cultural si el idioma destino es distinto de español
-  if (targetLang && targetLang !== 'es') {
-    culturalExplanation = await translateTextGoogle(culturalExplanation, targetLang);
+  // Divide el texto detectado por saltos de línea o por palabras clave, si hay varios
+  const texts = text ? text.split('\n').map(t => t.trim()).filter(Boolean) : [];
+
+  // Genera explicación cultural para cada texto y cada objeto detectado
+  const explanations = [];
+  for (const t of texts) {
+    const explanation = await getCulturalExplanation(t, labels, objects, targetLang);
+    explanations.push(explanation);
+  }
+  for (const obj of objects) {
+    const explanation = await getCulturalExplanation('', [obj.name], [obj], targetLang);
+    explanations.push(explanation);
+  }
+
+  // Traducción híbrida para cada texto detectado
+  const translations = [];
+  for (const t of texts) {
+    const translation = await translateTextHybrid(t, lang, targetLang);
+    translations.push(translation);
   }
 
   return {
-    text,
+    texts,
     detectedLang: lang,
     labels,
-    culturalExplanation,
+    objects,
+    explanations,
+    translations,
     explanationLang: targetLang
   };
 }
 
-/**
- * Procesa, obtiene explicación y traduce tanto el texto como la explicación.
- * @param {string} imagePath - Ruta de la imagen.
- * @param {string} targetLang - Idioma destino para la traducción (ej: 'es', 'en', 'qu').
- * @returns {Promise<object>}
- */
-async function processAndTranslate(imagePath, targetLang = 'es') {
-    const { text, detectedLang, labels, culturalExplanation } = await processImageForCulture(imagePath, targetLang);
-    
-    // Traduce tanto el texto original como la explicación
-    const translatedText = await translateTextGoogle(text, targetLang);
-    // culturalExplanation ya está traducida si targetLang !== 'es' por la función anterior
-    // Pero si quieres aún forzar la traducción aquí, puedes hacerlo así:
-    const translatedExplanation = await translateTextGoogle(culturalExplanation, targetLang);
-
-    return {
-        text,
-        detectedLang,
-        labels,
-        culturalExplanation, // Ya traducida si targetLang !== 'es'
-        translatedText,
-        translatedExplanation,
-        targetLang
-    };
-}
-
-module.exports = { processImageForCulture, processAndTranslate };
+module.exports = { processImageForCulture };

@@ -11,6 +11,7 @@ const planRoutes = require('./routes/planRoutes');
 const seedRoutes = require('./routes/seedRoutes');
 const ocrRoutes = require('./services/ocr/ocr.routes');
 const translateRoutes = require('./services/translate/translate.routes');
+const quechuaRoutes = require('./services/translate/quechua.routes'); // Nueva ruta para BD de quechua cusqueño
 
 dotenv.config();
 connectDB();
@@ -30,6 +31,7 @@ app.use('/api/planes', planRoutes);
 app.use('/api/seed', seedRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/translate', translateRoutes);
+app.use('/api/quechua', quechuaRoutes); // Agregada para términos quechua cusqueño
 
 // Swagger documentation
 try {
@@ -50,6 +52,7 @@ app.get('/', (req, res) => {
       seed: '/api/seed',
       ocr: '/api/ocr',
       translate: '/api/translate',
+      quechua: '/api/quechua',
       docs: '/api/docs'
     }
   });
