@@ -1,19 +1,17 @@
-const { translateTextGoogle } = require('./translator');
+const { translateTextHybrid } = require('./translator');
 
 exports.translateText = async (req, res) => {
-  const { text, target } = req.body;
-  // El idioma de origen ("source") es opcional con la API de Google, lo detecta solo.
-
-  if (!text || !target) {
-    return res.status(400).json({ error: "Faltan parámetros: se requiere 'text' y 'target'." });
+  const { text, source, target } = req.body;
+  if (!text || !source || !target) {
+    return res.status(400).json({ error: "Faltan parámetros: 'text', 'source', 'target'." });
   }
 
   try {
-    const translatedText = await translateTextGoogle(text, target);
-    
+    const translatedText = await translateTextHybrid(text, source, target);
     res.json({
       originalText: text,
       translatedText,
+      sourceLanguage: source,
       targetLanguage: target
     });
   } catch (error) {
