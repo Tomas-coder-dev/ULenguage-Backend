@@ -9,6 +9,7 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const planRoutes = require('./routes/planRoutes');
 const seedRoutes = require('./routes/seedRoutes');
+const achievementRoutes = require('./routes/achievementRoutes');
 const ocrRoutes = require('./services/ocr/ocr.routes');
 const translateRoutes = require('./services/translate/translate.routes');
 const quechuaRoutes = require('./services/translate/quechua.routes'); // Nueva ruta para BD de quechua cusqueño
@@ -29,6 +30,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/planes', planRoutes);
 app.use('/api/seed', seedRoutes);
+app.use('/api/achievements', achievementRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/translate', translateRoutes);
 app.use('/api/quechua', quechuaRoutes); // Agregada para términos quechua cusqueño
@@ -50,6 +52,8 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       planes: '/api/planes',
       seed: '/api/seed',
+      achievements: '/api/achievements',
+      zones: '/api/achievements/zones',
       ocr: '/api/ocr',
       translate: '/api/translate',
       quechua: '/api/quechua',

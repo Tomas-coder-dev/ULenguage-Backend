@@ -93,6 +93,15 @@ npm start    # Producción
 | GET | `/api/planes` | Listar planes disponibles |
 | POST | `/api/seed` | Ejecutar seeders |
 
+### 🏆 Sistema de Logros por Zonas Turísticas
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| POST | `/api/achievements/unlock` | Desbloquear logro (GPS o QR). Body: `{lat, lon, zoneId, method}` |
+| POST | `/api/achievements/sync` | Sincronizar logros offline. Body: `{achievements: [...]}` |
+| GET | `/api/achievements/me` | Obtener logros del usuario autenticado |
+| GET | `/api/achievements/zones` | Listar todas las zonas turísticas |
+| GET | `/api/achievements/zones/nearby` | Buscar zonas cercanas. Query: `?lat=X&lon=Y&radius=5000` |
+
 ### OCR y Traducción con IA
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
