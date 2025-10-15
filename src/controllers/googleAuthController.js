@@ -1,8 +1,31 @@
+/**
+ * @desc   Redirigir automáticamente a Google OAuth (flujo web)
+ * @route  GET /api/auth/google/redirect
+ * @access Public
+ */
+const redirectToGoogleAuth = (req, res) => {
+  const apiUrl = process.env.URL_API || 'http://localhost:5000';
+  const redirectUri = `${apiUrl}/api/auth/google/callback`;
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
+    `redirect_uri=${redirectUri}&` +
+    `response_type=code&` +
+    `scope=profile email&` +
+    `access_type=offline`;
+  return res.redirect(authUrl);
+};
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+// Inicializar el cliente OAuth2 con client_id, client_secret y redirect_uri
+const apiUrl = process.env.URL_API || 'http://localhost:5000';
+const redirectUri = `${apiUrl}/api/auth/google/callback`;
+const client = new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  redirectUri
+);
 
 /**
  * @desc   Autenticar usuario con Google OAuth2
@@ -12,11 +35,14 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const googleAuth = async (req, res) => {
   try {
     const { tokenId, idToken, token: googleToken } = req.body;
-    
+
     // Aceptar cualquiera de los nombres comunes para el token
     const authToken = tokenId || idToken || googleToken;
 
     if (!authToken) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[GoogleAuth] Token de Google no recibido en request:', req.body);
+      }
       return res.status(400).json({ 
         message: 'Token de Google es requerido (tokenId, idToken o token)' 
       });
@@ -33,6 +59,9 @@ const googleAuth = async (req, res) => {
 
     // Verificar que el email esté verificado
     if (!payload.email_verified) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[GoogleAuth] Email de Google no verificado:', email);
+      }
       return res.status(400).json({ 
         message: 'Email de Google no verificado' 
       });
@@ -47,6 +76,9 @@ const googleAuth = async (req, res) => {
         user.googleId = googleId;
         user.avatar = picture || user.avatar;
         await user.save();
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[GoogleAuth] Usuario existente vinculado a Google: ${email}`);
+        }
       }
     } else {
       // Crear nuevo usuario con Google
@@ -58,10 +90,18 @@ const googleAuth = async (req, res) => {
         password: Math.random().toString(36).slice(-8), // Password temporal (no se usará)
         plan: 'free'
       });
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[GoogleAuth] Nuevo usuario creado con Google: ${email}`);
+      }
     }
 
     // Generar JWT
     const token = generateToken(user._id);
+
+    if (process.env.NODE_ENV === 'production') {
+      // Log en producción (solo info relevante, sin datos sensibles)
+      console.log(`[PROD][GoogleAuth] Login Google para usuario: ${email}, id: ${user._id}`);
+    }
 
     res.status(200).json({
       _id: user._id,
@@ -74,8 +114,13 @@ const googleAuth = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error en autenticación Google:', error);
-    
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[GoogleAuth][ERROR]', error);
+    } else {
+      // Log en producción (sin stack, solo mensaje)
+      console.error(`[PROD][GoogleAuth][ERROR]`, error.message);
+    }
+
     if (error.message.includes('Token used too late')) {
       return res.status(401).json({ 
         message: 'Token de Google expirado, por favor inicia sesión nuevamente' 
@@ -101,8 +146,9 @@ const googleAuth = async (req, res) => {
  * @access Public
  */
 const getGoogleAuthUrl = (req, res) => {
-  const redirectUri = 'http://localhost:5000/api/auth/google/callback';
-  
+  const apiUrl = process.env.URL_API || 'http://localhost:5000';
+  const redirectUri = `${apiUrl}/api/auth/google/callback`;
+
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
     `redirect_uri=${redirectUri}&` +
@@ -131,12 +177,10 @@ const googleCallback = async (req, res) => {
       });
     }
 
-    // Intercambiar el código por tokens
-    const { tokens } = await client.getToken({
-      code,
-      redirect_uri: 'http://localhost:5000/api/auth/google/callback',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET
-    });
+    const frontendUrl = process.env.URL_FRONTEND || 'http://localhost:3000';
+
+    // Intercambiar el código por tokens (ya no es necesario pasar client_secret ni redirect_uri)
+    const { tokens } = await client.getToken(code);
 
     // Verificar el ID token
     const ticket = await client.verifyIdToken({
@@ -170,7 +214,7 @@ const googleCallback = async (req, res) => {
     const token = generateToken(user._id);
 
     // Redirigir al frontend con el token
-    res.redirect(`http://localhost:3000/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
+    res.redirect(`${frontendUrl}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
       _id: user._id,
       name: user.name,
       email: user.email,
@@ -180,12 +224,14 @@ const googleCallback = async (req, res) => {
 
   } catch (error) {
     console.error('Error en callback de Google:', error);
-    res.redirect(`http://localhost:3000/auth/error?message=${encodeURIComponent('Error al autenticar con Google')}`);
+    const frontendUrl = process.env.URL_FRONTEND || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/auth/error?message=${encodeURIComponent('Error al autenticar con Google')}`);
   }
 };
 
 module.exports = { 
   googleAuth, 
   getGoogleAuthUrl, 
-  googleCallback 
+  googleCallback,
+  redirectToGoogleAuth
 };
