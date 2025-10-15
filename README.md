@@ -84,8 +84,11 @@ npm start    # Producción
 ### Autenticación
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| POST | `/api/auth/register` | Registro de usuario |
-| POST | `/api/auth/login` | Inicio de sesión |
+| POST | `/api/auth/register` | Registro de usuario con email/password |
+| POST | `/api/auth/login` | Inicio de sesión tradicional |
+| POST | `/api/auth/google` | Autenticación con Google OAuth2. Body: `{tokenId}` |
+| GET | `/api/auth/google/url` | Obtener URL de autorización de Google (web) |
+| GET | `/api/auth/google/callback` | Callback de Google OAuth (redireccionamiento) |
 
 ### Planes y Contenido
 | Método | Endpoint | Descripción |
