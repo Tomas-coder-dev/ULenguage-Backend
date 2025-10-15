@@ -1,21 +1,29 @@
 const { seedPlans } = require('./planSeeder');
 const { seedContent } = require('./contentSeeder');
 const seedZones = require('./zoneSeeder');
+const seedAchievements = require('./achievementSeeder');
+const seedUsers = require('./userSeeder');
 
 const runAllSeeders = async () => {
   try {
     console.log('🌱 Iniciando proceso de seeders...');
     
-    // Sembrar planes
-    await seedPlans();
-    
-    // Sembrar contenido cultural
-    await seedContent();
-    
-    // Sembrar zonas turísticas
-    await seedZones();
-    
-    console.log('🎉 Todos los seeders completados exitosamente');
+  // Sembrar usuarios
+  await seedUsers();
+
+  // Sembrar planes
+  await seedPlans();
+
+  // Sembrar contenido cultural
+  await seedContent();
+
+  // Sembrar zonas turísticas
+  await seedZones();
+
+  // Sembrar logros (achievements)
+  await seedAchievements();
+
+  console.log('🎉 Todos los seeders completados exitosamente');
     
     return {
       success: true,

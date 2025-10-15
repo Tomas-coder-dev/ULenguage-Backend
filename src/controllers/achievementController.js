@@ -13,6 +13,9 @@ const unlockAchievement = async (req, res) => {
 
     // Validar datos requeridos
     if (lat === undefined || lon === undefined || !zoneId) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[Achievement] Faltan datos requeridos:`, req.body);
+      }
       return res.status(400).json({ 
         message: 'Faltan datos requeridos: lat, lon, zoneId' 
       });
@@ -21,6 +24,9 @@ const unlockAchievement = async (req, res) => {
     // Verificar si la zona existe
     const zone = await Zone.findOne({ zone_id: zoneId, active: true });
     if (!zone) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[Achievement] Zona no encontrada o inactiva: ${zoneId}`);
+      }
       return res.status(404).json({ 
         message: 'Zona no encontrada o inactiva' 
       });
@@ -29,6 +35,9 @@ const unlockAchievement = async (req, res) => {
     // Verificar si el usuario ya tiene este logro
     const hasAchievement = await Achievement.hasAchievement(userId, zoneId);
     if (hasAchievement) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[Achievement] Usuario ya tiene el logro: user=${userId}, zone=${zoneId}`);
+      }
       return res.status(400).json({ 
         message: 'Ya has desbloqueado este logro',
         achievement: await Achievement.findOne({ user_id: userId, zone_id: zoneId })
@@ -39,6 +48,9 @@ const unlockAchievement = async (req, res) => {
     if (method === 'gps') {
       const isWithinRadius = zone.isWithinRadius(lon, lat);
       if (!isWithinRadius) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[Achievement] Usuario fuera de radio: user=${userId}, zone=${zoneId}`);
+        }
         return res.status(400).json({ 
           message: 'No estás dentro del área de la zona',
           distance_hint: 'Debes estar más cerca del lugar'
@@ -60,13 +72,22 @@ const unlockAchievement = async (req, res) => {
       content_unlocked: zone.reward_content
     });
 
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[Achievement] Logro desbloqueado: user=${userId}, zone=${zoneId}`);
+    } else {
+      console.log(`[PROD][Achievement] Logro desbloqueado: user=${userId}, zone=${zoneId}`);
+    }
     res.status(201).json({
       message: '🎉 ¡Logro desbloqueado!',
       achievement,
       reward: zone.reward_content
     });
   } catch (error) {
-    console.error('Error al desbloquear logro:', error);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[Achievement][ERROR]', error);
+    } else {
+      console.error('[PROD][Achievement][ERROR]', error.message);
+    }
     res.status(500).json({ 
       message: 'Error al desbloquear logro',
       error: error.message 

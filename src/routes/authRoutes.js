@@ -3,7 +3,8 @@ const { register, login } = require('../controllers/authController');
 const { 
   googleAuth, 
   getGoogleAuthUrl, 
-  googleCallback 
+  googleCallback,
+  redirectToGoogleAuth
 } = require('../controllers/googleAuthController');
 
 const router = express.Router();
@@ -16,5 +17,6 @@ router.post('/login', login);
 router.post('/google', googleAuth);
 router.get('/google/url', getGoogleAuthUrl);
 router.get('/google/callback', googleCallback);
+router.get('/google/redirect', redirectToGoogleAuth);
 
 module.exports = router;

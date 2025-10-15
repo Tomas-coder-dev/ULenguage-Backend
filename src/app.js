@@ -21,7 +21,7 @@ const app = express();
 
 // Middlewares
 app.use(cors({
-  origin: 'http://localhost:3000', // Solo para Flutter web
+  origin: process.env.URL_FRONTEND || 'http://localhost:3000', // Solo para Flutter web
   credentials: true
 }));
 app.use(express.json());

@@ -14,8 +14,7 @@ const UserSchema = new mongoose.Schema({
   },
   googleId: { 
     type: String, 
-    sparse: true, // Permite que sea único pero también null
-    unique: true 
+    sparse: true // Permite que sea único pero también null
   },
   avatar: { 
     type: String, 
