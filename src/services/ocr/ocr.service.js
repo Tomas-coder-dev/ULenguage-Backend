@@ -1,34 +1,46 @@
-const sharp = require('sharp');
-const Tesseract = require('tesseract.js');
-const fs = require('fs');
+const { analyzeImageWithVision } = require('./vision.service');
+const { getCulturalExplanation } = require('./gemini.service');
+const { translateTextHybrid } = require('../translate/translator'); // usa el híbrido
 
 /**
- * Preprocesa la imagen para mejorar el OCR y luego extrae el texto.
- * @param {string} imagePath - Ruta temporal de la imagen recibida.
- * @param {string} lang - Idioma para Tesseract (por ej. 'eng', 'spa', 'que').
- * @returns {Promise<string>} - Texto extraído de la imagen.
+ * Procesa una imagen y devuelve arrays de textos, objetos, etiquetas y explicaciones culturales.
+ * @param {string} imagePath - Ruta de la imagen.
+ * @param {string} targetLang - Idioma destino (ej: 'es', 'en', 'qu')
+ * @returns {Promise<object>}
  */
-exports.processImageAndExtractText = async (imagePath, lang = 'eng') => {
-  // Preprocesamiento de imagen: escala de grises, normalización, resize (opcional)
-  const processedPath = `${imagePath}_processed.png`;
+async function processImageForCulture(imagePath, targetLang = 'es') {
+  const { text, lang, labels, objects } = await analyzeImageWithVision(imagePath, [targetLang, 'es', 'qu', 'en']);
 
-  await sharp(imagePath)
-    .grayscale()
-    .normalize()
-    //.resize(1024) // opcional: redimensionar si las imágenes suelen ser muy grandes
-    .toFile(processedPath);
+  // Divide el texto detectado por saltos de línea o por palabras clave, si hay varios
+  const texts = text ? text.split('\n').map(t => t.trim()).filter(Boolean) : [];
 
-  // OCR con Tesseract usando los archivos locales de idioma
-  const { data: { text } } = await Tesseract.recognize(
-    processedPath,
-    lang,
-    {
-      langPath: './tessdata'
-    }
-  );
+  // Genera explicación cultural para cada texto y cada objeto detectado
+  const explanations = [];
+  for (const t of texts) {
+    const explanation = await getCulturalExplanation(t, labels, objects, targetLang);
+    explanations.push(explanation);
+  }
+  for (const obj of objects) {
+    const explanation = await getCulturalExplanation('', [obj.name], [obj], targetLang);
+    explanations.push(explanation);
+  }
 
-  // Borra la imagen procesada
-  fs.unlinkSync(processedPath);
+  // Traducción híbrida para cada texto detectado
+  const translations = [];
+  for (const t of texts) {
+    const translation = await translateTextHybrid(t, lang, targetLang);
+    translations.push(translation);
+  }
 
-  return text;
-};
+  return {
+    texts,
+    detectedLang: lang,
+    labels,
+    objects,
+    explanations,
+    translations,
+    explanationLang: targetLang
+  };
+}
+
+module.exports = { processImageForCulture };

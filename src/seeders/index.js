@@ -1,5 +1,6 @@
 const { seedPlans } = require('./planSeeder');
 const { seedContent } = require('./contentSeeder');
+const seedZones = require('./zoneSeeder');
 
 const runAllSeeders = async () => {
   try {
@@ -10,6 +11,9 @@ const runAllSeeders = async () => {
     
     // Sembrar contenido cultural
     await seedContent();
+    
+    // Sembrar zonas turísticas
+    await seedZones();
     
     console.log('🎉 Todos los seeders completados exitosamente');
     
