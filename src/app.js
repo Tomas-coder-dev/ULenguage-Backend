@@ -5,21 +5,37 @@ const swaggerUi = require('swagger-ui-express');
 const yaml = require('yamljs');
 const path = require('path');
 
-const connectDB = require('./config/db');
+// LOGS DE DIAGNÓSTICO
+console.log('Iniciando ULenguage Backend...');
+
+dotenv.config();
+console.log('Variables de entorno cargadas.');
+
+// Conexión a la base de datos con manejo de errores
+let dbConnected = false;
+try {
+  require('./config/db')();
+  dbConnected = true;
+  console.log('Base de datos conectada exitosamente.');
+} catch (e) {
+  console.error('❌ Error conectando a la base de datos:', e);
+}
+
 const authRoutes = require('./routes/authRoutes');
 const planRoutes = require('./routes/planRoutes');
 const seedRoutes = require('./routes/seedRoutes');
 const achievementRoutes = require('./routes/achievementRoutes');
 const ocrRoutes = require('./services/ocr/ocr.routes');
 const translateRoutes = require('./services/translate/translate.routes');
-const quechuaRoutes = require('./services/translate/quechua.routes'); // Nueva ruta para BD de quechua cusqueño
+const quechuaRoutes = require('./services/translate/quechua.routes');
 
-dotenv.config();
-connectDB();
-
+// Inicializa la app
 const app = express();
 
-// Middlewares
+// Middleware para archivos estáticos (favicon, etc)
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Middlewares generales
 app.use(cors({
   origin: process.env.URL_FRONTEND || 'http://localhost:3000', // Solo para Flutter web
   credentials: true
@@ -33,21 +49,22 @@ app.use('/api/seed', seedRoutes);
 app.use('/api/achievements', achievementRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/translate', translateRoutes);
-app.use('/api/quechua', quechuaRoutes); // Agregada para términos quechua cusqueño
+app.use('/api/quechua', quechuaRoutes);
 
 // Swagger documentation
 try {
   const swaggerDocument = yaml.load(path.join(__dirname, '../docs/swagger.yaml'));
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+  console.log('Swagger documentation cargada.');
 } catch (error) {
-  console.warn('⚠️  No se pudo cargar Swagger documentation');
+  console.warn('⚠️  No se pudo cargar Swagger documentation', error);
 }
 
 // Ruta principal
 app.get('/', (req, res) => {
   res.json({
     message: 'ULenguage Backend v1.0.0 - Sprint 1',
-    status: 'Funcionando correctamente',
+    status: dbConnected ? 'Funcionando correctamente' : 'Error conectando base de datos',
     endpoints: {
       auth: '/api/auth',
       planes: '/api/planes',
@@ -64,9 +81,10 @@ app.get('/', (req, res) => {
 
 // Middleware de manejo de errores
 app.use((error, req, res, next) => {
-  console.error('Error:', error.message);
+  console.error('Error middleware:', error);
   res.status(500).json({ 
-    message: 'Error interno del servidor' 
+    message: 'Error interno del servidor',
+    error: error.message
   });
 });
 
