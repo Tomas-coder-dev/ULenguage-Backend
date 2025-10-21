@@ -5,13 +5,10 @@ const swaggerUi = require('swagger-ui-express');
 const yaml = require('yamljs');
 const path = require('path');
 
-// LOGS DE DIAGNÓSTICO
 console.log('Iniciando ULenguage Backend...');
-
 dotenv.config();
 console.log('Variables de entorno cargadas.');
 
-// Conexión a la base de datos con manejo de errores
 let dbConnected = false;
 try {
   require('./config/db')();
@@ -29,20 +26,19 @@ const ocrRoutes = require('./services/ocr/ocr.routes');
 const translateRoutes = require('./services/translate/translate.routes');
 const quechuaRoutes = require('./services/translate/quechua.routes');
 
-// Inicializa la app
+// 🚩 AÑADE ESTAS LINEAS:
+const explorerRoutes = require('./services/explorer/explorer.routes'); // <--- Asegúrate de tener este archivo
+
 const app = express();
 
-// Middleware para archivos estáticos (favicon, etc)
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Middlewares generales
 app.use(cors({
-  origin: process.env.URL_FRONTEND || 'http://localhost:3000', // Solo para Flutter web
+  origin: process.env.URL_FRONTEND || 'http://localhost:3000',
   credentials: true
 }));
 app.use(express.json());
 
-// Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/planes', planRoutes);
 app.use('/api/seed', seedRoutes);
@@ -51,7 +47,9 @@ app.use('/api/ocr', ocrRoutes);
 app.use('/api/translate', translateRoutes);
 app.use('/api/quechua', quechuaRoutes);
 
-// Swagger documentation
+// 🚩 AGREGA TU ENDPOINT DE EXPLORER
+app.use('/api/explorer', explorerRoutes);
+
 try {
   const swaggerDocument = yaml.load(path.join(__dirname, '../docs/swagger.yaml'));
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -60,7 +58,6 @@ try {
   console.warn('⚠️  No se pudo cargar Swagger documentation', error);
 }
 
-// Ruta principal
 app.get('/', (req, res) => {
   res.json({
     message: 'ULenguage Backend v1.0.0 - Sprint 1',
@@ -74,12 +71,12 @@ app.get('/', (req, res) => {
       ocr: '/api/ocr',
       translate: '/api/translate',
       quechua: '/api/quechua',
+      explorer: '/api/explorer', // <--- AGREGA AQUÍ TU ENDPOINT
       docs: '/api/docs'
     }
   });
 });
 
-// Middleware de manejo de errores
 app.use((error, req, res, next) => {
   console.error('Error middleware:', error);
   res.status(500).json({ 

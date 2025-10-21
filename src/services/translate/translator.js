@@ -1,15 +1,15 @@
 const { Translate } = require('@google-cloud/translate').v2;
-const translate = new Translate({ keyFilename: 'google-credentials.json' });
 const QuechuaCusqueno = require('../../models/QuechuaCusqueno');
 const { scrapeGlosbe } = require('./glosbeScraper');
 
-// Mensajes amigables para "palabra no encontrada" en varios idiomas
+// Instancia de Translate usando la variable de entorno GOOGLE_APPLICATION_CREDENTIALS
+const translate = new Translate();
+
 const messages = {
   es: "Palabra no encontrada.",
   en: "Word not found.",
   quz: "Simikuwanqachu tariq.",
   qu: "Simikuwanqachu tariq."
-  // Puedes agregar más idiomas aquí si lo necesitas
 };
 
 /**
@@ -26,12 +26,17 @@ async function translateTextHybrid(text, sourceLanguage, targetLanguage) {
     if (term) {
       return term.quechua_cusqueno;
     }
-    // Si no está, sigue al scraper...
   }
 
-  // 2. Scraper para cualquier combinación
-  const glosbeResults = await scrapeGlosbe(sourceLanguage, targetLanguage, text);
-  if (glosbeResults.length > 0) {
+  // 2. Scraper para cualquier combinación (manejo silencioso del 404)
+  let glosbeResults = [];
+  try {
+    glosbeResults = await scrapeGlosbe(sourceLanguage, targetLanguage, text);
+  } catch (error) {
+    // Solo loguea si realmente quieres debuggear Glosbe
+    // console.warn('Glosbe error:', error.message);
+  }
+  if (glosbeResults && glosbeResults.length > 0) {
     return glosbeResults[0];
   }
 
@@ -40,13 +45,11 @@ async function translateTextHybrid(text, sourceLanguage, targetLanguage) {
     let [translations] = await translate.translate(text, targetLanguage);
     translations = Array.isArray(translations) ? translations : [translations];
     const googleTranslation = translations[0];
-    // Si Google devuelve exactamente el mismo texto, consideramos que no encontró traducción
     if (googleTranslation && googleTranslation.trim().toLowerCase() !== text.trim().toLowerCase()) {
       return googleTranslation;
     }
   } catch (error) {
     console.error('ERROR en Google Translate API:', error);
-    // Si Google falla, sigue con mensaje por defecto
   }
 
   // 4. Si no se encuentra, retorna mensaje en el idioma de destino

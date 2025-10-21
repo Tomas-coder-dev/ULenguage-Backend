@@ -43,4 +43,12 @@ async function processImageForCulture(imagePath, targetLang = 'es') {
   };
 }
 
-module.exports = { processImageForCulture };
+/**
+ * Alias para endpoint /api/ocr/analyze-and-translate
+ */
+async function processAndTranslate(imagePath, targetLang = 'es') {
+  // Si quieres lógica diferente, ponla aquí. Si no, solo llama al anterior:
+  return await processImageForCulture(imagePath, targetLang);
+}
+
+module.exports = { processImageForCulture, processAndTranslate };
