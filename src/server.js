@@ -1,18 +1,15 @@
 const express = require('express');
 const cors = require('cors');
 
-// Importa tus rutas (¡RUTAS CORREGIDAS!)
-// Como server.js está en 'src', ya no necesitamos poner 'src/' en la ruta.
+// Importa tus rutas
 const ocrRoutes = require('./services/ocr/ocr.routes');
 const translateRoutes = require('./services/translate/translate.routes');
 
-// Inicializa la aplicación
 const app = express();
-const port = process.env.PORT || 4000;
 
 // Middlewares
-app.use(cors()); // Permite peticiones desde otros orígenes
-app.use(express.json()); // Permite al servidor entender JSON
+app.use(cors());
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Rutas principales de la API
@@ -24,7 +21,4 @@ app.get('/api', (req, res) => {
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/translate', translateRoutes);
 
-// Inicia el servidor
-app.listen(port, () => {
-  console.log(`Servidor corriendo en http://localhost:${port}`);
-});
+module.exports = app; // <-- SOLO EXPORTA EL OBJETO app, NO uses app.listen()
