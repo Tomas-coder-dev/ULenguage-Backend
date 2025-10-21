@@ -3,11 +3,63 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const { translateTextGoogle } = require('../translate/translator'); // Ajusta el path si es necesario
 
 /**
+ * Genera una breve descripción turística de un lugar usando Gemini y la traduce a otros idiomas.
+ * @param {object} place - Objeto de Google Places API (debe tener al menos name, type, location).
+ * @returns {Promise<{es: string, en: string, qu: string}>}
+ */
+async function getPlaceDescriptionIA(place) {
+  // Construye un prompt descriptivo y breve
+  const prompt = `
+Eres un guía turístico andino. Describe en máximo 2 frases y menos de 150 caracteres el lugar "${place.name}" en Cusco, Perú, de forma interesante, en español, para turistas.
+Incluye contexto cultural si es relevante.
+`;
+
+  let description_es;
+  try {
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        contents: [{ parts: [{ text: prompt }] }]
+      },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+    description_es = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    // Limitar longitud
+    if (description_es && description_es.length > 150) {
+      description_es = description_es.slice(0, 147).trim() + '...';
+    }
+  } catch (error) {
+    console.error("Error generando descripción Gemini:", error.response?.data || error.message);
+  }
+
+  // Fallback a mensaje por defecto si la IA falla
+  if (!description_es) {
+    description_es = "Descripción no disponible por el momento.";
+  }
+
+  // Traduce al inglés y quechua
+  let description_en = "Description not available at the moment.";
+  let description_qu = "Manaraq kashanmi willakuy.";
+  try {
+    description_en = await translateTextGoogle(description_es, 'en');
+  } catch {}
+  try {
+    description_qu = await translateTextGoogle(description_es, 'qu');
+  } catch {}
+
+  return {
+    es: description_es,
+    en: description_en || "Description not available at the moment.",
+    qu: description_qu || "Manaraq kashanmi willakuy."
+  };
+}
+
+/**
  * Obtiene una explicación cultural breve y precisa de Gemini y la traduce si es necesario.
- * @param {string} text - Texto extraído de la imagen.
- * @param {string[]} labels - Etiquetas de la imagen.
- * @param {object[]} objects - Detalles avanzados de objetos (opcional)
- * @param {string} targetLang - Idioma destino ('es', 'en', 'qu', etc.)
+ * @param {string} text
+ * @param {string[]} labels
+ * @param {object[]} objects
+ * @param {string} targetLang
  * @returns {Promise<string>}
  */
 async function getCulturalExplanation(text, labels, objects = [], targetLang = 'es') {
@@ -52,4 +104,7 @@ Tarea: Da una explicación cultural muy breve (máx 2 oraciones y menos de 120 c
   }
 }
 
-module.exports = { getCulturalExplanation };
+module.exports = {
+  getCulturalExplanation,
+  getPlaceDescriptionIA
+};
