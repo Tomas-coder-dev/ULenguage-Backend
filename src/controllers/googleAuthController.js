@@ -1,6 +1,6 @@
 /**
  * @desc   Redirigir automáticamente a Google OAuth (flujo web)
- * @route  GET /api/auth/google/redirect
+ * @route  GET / 
  * @access Public
  */
 const redirectToGoogleAuth = (req, res) => {
