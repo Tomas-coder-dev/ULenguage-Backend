@@ -39,6 +39,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Endpoint para despliegue automático
+app.use('/api', deployRoutes);
+
 app.use('/api/auth', authRoutes);
 app.use('/api/planes', planRoutes);
 app.use('/api/seed', seedRoutes);

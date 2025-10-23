@@ -1,0 +1,182 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  ULenguage Backend - Node.js + MongoDB en EC2 Ubuntu, con parámetros de entorno y despliegue automático. Región: sa-east-1 (São Paulo).
+  Elimina la pila para borrar todos los recursos y evitar costos extra.
+
+Parameters:
+  KeyName:
+    Description: Nombre para la nueva clave SSH (KeyPair) que se generará para acceso a la instancia.
+    Type: String
+    Default: ulenguage-backend-key
+  InstanceType:
+    Description: Tipo de instancia EC2 (t2.micro entra en el free tier).
+    Type: String
+    Default: t2.micro
+  GitRepoUrl:
+    Description: URL HTTPS de tu repositorio ULenguage Backend (ejemplo: https://github.com/Tomas-coder-dev/ULenguage-Backend.git)
+    Type: String
+  PORT:
+    Description: Puerto de la API Express (ejemplo: 5000)
+    Type: String
+    Default: '5000'
+  MONGO_URI:
+    Description: URI de conexión a MongoDB local (ejemplo: mongodb://127.0.0.1:27017/ulenguage)
+    Type: String
+    Default: 'mongodb://127.0.0.1:27017/ulenguage'
+  JWT_SECRET:
+    Description: Secreto para JWT
+    Type: String
+    NoEcho: true
+  GOOGLE_CLIENT_ID:
+    Description: Client ID de Google OAuth
+    Type: String
+  DEPLOY_TOKEN:
+    Description: Token secreto para el endpoint de despliegue automático
+    Type: String
+    NoEcho: true
+
+Resources:
+  # VPC para la red
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: ulenguage-vpc
+
+  # Subnet pública
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: sa-east-1a
+      Tags:
+        - Key: Name
+          Value: ulenguage-public-subnet
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: ulenguage-igw
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Tabla de rutas para acceso a Internet
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: ulenguage-rt
+
+  Route:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+  # Security Group para la instancia
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Permite acceso SSH, HTTP, HTTPS y API Express
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0 # SSH abierto (puedes restringir luego)
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0 # HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0 # HTTPS
+        - IpProtocol: tcp
+          FromPort: !Ref PORT
+          ToPort: !Ref PORT
+          CidrIp: 0.0.0.0/0 # API Express
+      Tags:
+        - Key: Name
+          Value: ulenguage-sg
+
+  # Genera nueva clave SSH
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Ref KeyName
+
+  # Instancia EC2 Ubuntu
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      ImageId: ami-0c55b159cbfafe1f0 # Ubuntu 22.04 LTS en sa-east-1 (actualiza si cambia)
+      Tags:
+        - Key: Name
+          Value: ulenguage-backend
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Actualiza e instala dependencias
+          apt-get update -y
+          apt-get upgrade -y
+          apt-get install -y git curl build-essential mongodb
+          # Instala Node.js LTS
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
+          npm install -g pm2
+          # Inicia MongoDB
+          systemctl start mongodb
+          systemctl enable mongodb
+          # Clona el repo
+          cd /home/ubuntu
+          git clone ${GitRepoUrl} ulenguage-backend
+          cd ulenguage-backend
+          # Crea el archivo .env con los parámetros
+          cat <<EOF > .env
+          PORT=${PORT}
+          MONGO_URI=${MONGO_URI}
+          JWT_SECRET=${JWT_SECRET}
+          GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+          DEPLOY_TOKEN=${DEPLOY_TOKEN}
+          EOF
+          # Instala dependencias y arranca el backend
+          npm install
+          pm2 start src/app.js --name ulenguage-backend
+          pm2 save
+          # El backend se actualizará solo por webhook GitHub (endpoint /api/deploy)
+
+Outputs:
+  InstancePublicIP:
+    Description: IP pública de la instancia EC2
+    Value: !GetAtt EC2Instance.PublicIp
+  WebhookEndpoint:
+    Description: URL para el webhook de GitHub (reemplaza por tu IP pública)
+    Value: !Sub "http://${EC2Instance.PublicIp}:5000/api/deploy?token=${DEPLOY_TOKEN}"
