@@ -21,4 +21,4 @@ app.get('/api', (req, res) => {
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/translate', translateRoutes);
 
-module.exports = app; // <-- SOLO EXPORTA EL OBJETO app, NO uses app.listen()
+module.exports = app;
