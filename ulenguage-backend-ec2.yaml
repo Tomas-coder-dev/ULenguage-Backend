@@ -5,34 +5,50 @@ Description: >
 
 Parameters:
   KeyName:
-    Description: Nombre para la nueva clave SSH (KeyPair) que se generará para acceso a la instancia.
+    Description: 'Nombre para la nueva clave SSH (KeyPair) que se generará para acceso a la instancia.'
     Type: String
     Default: ulenguage-backend-key
   InstanceType:
-    Description: Tipo de instancia EC2 (t2.micro entra en el free tier).
+    Description: 'Tipo de instancia EC2 (t2.micro entra en el free tier).'
     Type: String
     Default: t2.micro
   GitRepoUrl:
-    Description: URL HTTPS de tu repositorio ULenguage Backend (ejemplo: https://github.com/Tomas-coder-dev/ULenguage-Backend.git)
+    Description: 'URL HTTPS de tu repositorio ULenguage Backend (ejemplo: https://github.com/Tomas-coder-dev/ULenguage-Backend.git)'
     Type: String
-  PORT:
-    Description: Puerto de la API Express (ejemplo: 5000)
+    Default: 'https://github.com/Tomas-coder-dev/ULenguage-Backend.git'
+  Port:
+    Description: 'Puerto de la API Express (ejemplo: 5000)'
     Type: String
     Default: '5000'
-  MONGO_URI:
-    Description: URI de conexión a MongoDB local (ejemplo: mongodb://127.0.0.1:27017/ulenguage)
+  MongoUri:
+    Description: 'URI de conexión a MongoDB local (ejemplo: mongodb://127.0.0.1:27017/ulenguage)'
     Type: String
     Default: 'mongodb://127.0.0.1:27017/ulenguage'
-  JWT_SECRET:
-    Description: Secreto para JWT
+  JwtSecret:
+    Description: 'Secreto para JWT'
     Type: String
+    Default: 'ulenguage_super_secret_key'
     NoEcho: true
-  GOOGLE_CLIENT_ID:
-    Description: Client ID de Google OAuth
+  GoogleClientId:
+    Description: 'Client ID de Google OAuth'
     Type: String
-  DEPLOY_TOKEN:
-    Description: Token secreto para el endpoint de despliegue automático
+    Default: '250811921383-lk8t60vfumnfa6od44kbe4lm9bjkoj5n.apps.googleusercontent.com'
+  GoogleApplicationCredentials:
+    Description: 'Ruta del archivo de credenciales de Google (ejemplo: ./google-credentials.json)'
     Type: String
+    Default: './google-credentials.json'
+  GeminiApiKey:
+    Description: 'API Key de Gemini (puedes dejarlo vacío y editar luego)'
+    Type: String
+    Default: ''
+  GooglePlacesApiKey:
+    Description: 'API Key de Google Places (puedes dejarlo vacío y editar luego)'
+    Type: String
+    Default: ''
+  DeployToken:
+    Description: 'Token secreto para el endpoint de despliegue automático'
+    Type: String
+    Default: 'deploy_token_github_ulenguage2025'
     NoEcho: true
 
 Resources:
@@ -115,8 +131,8 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0 # HTTPS
         - IpProtocol: tcp
-          FromPort: !Ref PORT
-          ToPort: !Ref PORT
+          FromPort: !Ref Port
+          ToPort: !Ref Port
           CidrIp: 0.0.0.0/0 # API Express
       Tags:
         - Key: Name
@@ -137,7 +153,7 @@ Resources:
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref InstanceSecurityGroup
-      ImageId: ami-0c55b159cbfafe1f0 # Ubuntu 22.04 LTS en sa-east-1 (actualiza si cambia)
+      ImageId: ami-0476785cbf79d83a3 # Ubuntu 24.04 LTS en sa-east-1
       Tags:
         - Key: Name
           Value: ulenguage-backend
@@ -161,11 +177,14 @@ Resources:
           cd ulenguage-backend
           # Crea el archivo .env con los parámetros
           cat <<EOF > .env
-          PORT=${PORT}
-          MONGO_URI=${MONGO_URI}
-          JWT_SECRET=${JWT_SECRET}
-          GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-          DEPLOY_TOKEN=${DEPLOY_TOKEN}
+          PORT=${Port}
+          MONGO_URI=${MongoUri}
+          JWT_SECRET=${JwtSecret}
+          GOOGLE_CLIENT_ID=${GoogleClientId}
+          GOOGLE_APPLICATION_CREDENTIALS=${GoogleApplicationCredentials}
+          GEMINI_API_KEY=${GeminiApiKey}
+          GOOGLE_PLACES_API_KEY=${GooglePlacesApiKey}
+          DEPLOY_TOKEN=${DeployToken}
           EOF
           # Instala dependencias y arranca el backend
           npm install
@@ -179,4 +198,4 @@ Outputs:
     Value: !GetAtt EC2Instance.PublicIp
   WebhookEndpoint:
     Description: URL para el webhook de GitHub (reemplaza por tu IP pública)
-    Value: !Sub "http://${EC2Instance.PublicIp}:5000/api/deploy?token=${DEPLOY_TOKEN}"
+    Value: !Sub "http://${EC2Instance.PublicIp}:${Port}/api/deploy?token=${DeployToken}"
