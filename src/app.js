@@ -25,9 +25,7 @@ const achievementRoutes = require('./routes/achievementRoutes');
 const ocrRoutes = require('./services/ocr/ocr.routes');
 const translateRoutes = require('./services/translate/translate.routes');
 const quechuaRoutes = require('./services/translate/quechua.routes');
-
-// 🚩 AÑADE ESTAS LINEAS:
-const explorerRoutes = require('./services/explorer/explorer.routes'); // <--- Asegúrate de tener este archivo
+const explorerRoutes = require('./services/explorer/explorer.routes');
 
 const app = express();
 
@@ -39,9 +37,6 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Endpoint para despliegue automático
-app.use('/api', deployRoutes);
-
 app.use('/api/auth', authRoutes);
 app.use('/api/planes', planRoutes);
 app.use('/api/seed', seedRoutes);
@@ -49,8 +44,6 @@ app.use('/api/achievements', achievementRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/translate', translateRoutes);
 app.use('/api/quechua', quechuaRoutes);
-
-// 🚩 AGREGA TU ENDPOINT DE EXPLORER
 app.use('/api/explorer', explorerRoutes);
 
 try {
@@ -74,7 +67,7 @@ app.get('/', (req, res) => {
       ocr: '/api/ocr',
       translate: '/api/translate',
       quechua: '/api/quechua',
-      explorer: '/api/explorer', // <--- AGREGA AQUÍ TU ENDPOINT
+      explorer: '/api/explorer',
       docs: '/api/docs'
     }
   });
@@ -87,5 +80,16 @@ app.use((error, req, res, next) => {
     error: error.message
   });
 });
+
+// === START SERVER WHEN EXECUTED DIRECTLY ===
+// This ensures app.listen runs only when you execute `node src/app.js` (or `nodemon src/app.js`)
+// and not when the module is required by tests or other scripts.
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  const HOST = process.env.HOST || '0.0.0.0'; // 0.0.0.0 allows other devices in LAN to connect
+  app.listen(PORT, HOST, () => {
+    console.log(`Server listening on http://${HOST}:${PORT}`);
+  });
+}
 
 module.exports = app;

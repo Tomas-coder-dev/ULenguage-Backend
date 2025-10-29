@@ -1,21 +1,11 @@
 /**
  * server/services/ocr.service.js
  *
- * Orquesta Google Vision + Gemini + traductor híbrido.
- * - Detecta texto/objetos con Vision.
- * - Para cada objeto (y para cada texto si aplica) genera explicaciones culturales
- *   precomputadas en varios idiomas (por defecto: es, en, qu).
- * - Traduce opcionalmente los nombres cortos de los objetos a los mismos idiomas.
+ * Ajuste: devolver tanto la explicación completa como una preview corta.
+ * - explanations: mapa con textos (completos, con límite alto)
+ * - explanationsPreview: mapa con textos cortos (p. ej. 220 chars) para listados
  *
- * Resultado: objeto JSON que el frontend puede usar para mostrar instantáneamente
- * explicaciones en cualquiera de los idiomas precomputados y para seleccionar
- * explicaciones individuales por objeto.
- *
- * Requisitos:
- * - getCulturalExplanation(text, labels, objects, targetLang) en gemini.service.js
- *   debe aceptar targetLang y devolver string (o { explanation, lang }).
- * - translateTextHybrid(text, sourceLang, targetLang) en translate/translator.js
- *   debe devolver string (o '' si falla).
+ * Resto de comportamiento idéntico: Vision -> Gemini -> traducción híbrida.
  */
 
 const { analyzeImageWithVision } = require('./vision.service');
@@ -23,13 +13,17 @@ const { getCulturalExplanation } = require('./gemini.service');
 const { translateTextHybrid } = require('../translate/translator');
 
 const DEFAULT_LANGS = ['es', 'en', 'qu'];
-const MAX_EXPLANATION_LENGTH = 220;
+
+// Máximo razonable para preview mostrable en lista
+const MAX_PREVIEW_LENGTH = 220;
+// Límite alto para la explicación completa (evita respuestas infinitas)
+const MAX_FULL_LENGTH = 2000;
 
 /**
  * Safely call an async function with timeout.
  * If the promise doesn't resolve within ms, returns fallback.
  */
-async function withTimeout(promise, ms = 15000, fallback = '') {
+async function withTimeout(promise, ms = 30000, fallback = '') {
   let timer;
   const timeout = new Promise((resolve) =>
     timer = setTimeout(() => resolve(fallback), ms)
@@ -39,28 +33,44 @@ async function withTimeout(promise, ms = 15000, fallback = '') {
   return result;
 }
 
-/**
- * Normaliza nombre de idioma (ej. 'es', 'en', 'qu').
- */
 function normalizeLangCode(code) {
   if (!code) return 'und';
   return String(code).toLowerCase().split(/[-_]/)[0];
 }
 
+function safeString(x) {
+  if (x === null || x === undefined) return '';
+  return String(x).trim();
+}
+
+function makePreview(text, maxChars = MAX_PREVIEW_LENGTH) {
+  const s = safeString(text).replace(/\r\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+  if (!s) return '';
+  if (s.length <= maxChars) return s;
+  return s.slice(0, maxChars - 3).trim() + '...';
+}
+
+function makeFull(text, maxChars = MAX_FULL_LENGTH) {
+  const s = safeString(text).replace(/\r\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+  if (!s) return '';
+  if (s.length <= maxChars) return s;
+  return s.slice(0, maxChars - 3).trim() + '...';
+}
+
 /**
  * Genera explicaciones para un texto/objeto en todos los idiomas pedidos.
- * - input: { text?, objectName?, labels?, objects? }
- * - langs: array de códigos de idioma
- * Devuelve: { es: "...", en: "...", qu: "..." }
+ * Devuelve: { full: {es: '', en: '', qu: ''}, preview: {es:'', ...} }
  */
 async function generateExplanationsForItem(input, langs = DEFAULT_LANGS) {
-  const results = {};
+  const full = {};
+  const preview = {};
+
   await Promise.all(langs.map(async (lang) => {
     try {
       // getCulturalExplanation puede devolver string o { explanation, lang }
       const raw = await withTimeout(
         getCulturalExplanation(input.text || input.objectName || '', input.labels || [], input.objects || [], lang),
-        14000,
+        30000,
         ''
       );
 
@@ -75,17 +85,19 @@ async function generateExplanationsForItem(input, langs = DEFAULT_LANGS) {
         explanation = String(raw);
       }
 
-      explanation = explanation.trim();
-      if (explanation.length > MAX_EXPLANATION_LENGTH) {
-        explanation = explanation.slice(0, MAX_EXPLANATION_LENGTH - 3).trim() + '...';
-      }
-      results[normalizeLangCode(lang)] = explanation;
+      explanation = safeString(explanation);
+
+      // store full (with a high cap) and preview (short)
+      full[normalizeLangCode(lang)] = makeFull(explanation);
+      preview[normalizeLangCode(lang)] = makePreview(explanation);
     } catch (err) {
       console.error(`generateExplanationsForItem error for lang=${lang}:`, err?.message || err);
-      results[normalizeLangCode(lang)] = '';
+      full[normalizeLangCode(lang)] = '';
+      preview[normalizeLangCode(lang)] = '';
     }
   }));
-  return results;
+
+  return { full, preview };
 }
 
 /**
@@ -96,7 +108,6 @@ async function translateNameAllLangs(name, sourceLang = 'und', langs = DEFAULT_L
   const results = {};
   await Promise.all(langs.map(async (lang) => {
     try {
-      // Si el idioma destino coincide con la fuente, devolvemos el original
       if (!name) {
         results[normalizeLangCode(lang)] = '';
         return;
@@ -121,24 +132,9 @@ async function translateNameAllLangs(name, sourceLang = 'und', langs = DEFAULT_L
 
 /**
  * Principal: procesa la imagen y devuelve explicaciones por objeto y por texto.
- *
- * response shape:
- * {
- *   texts: [ { text: "...", explanations: { es:"", en:"", qu:"" } }, ... ],
- *   detectedLang: "en",
- *   labels: [...],
- *   objects: [
- *     {
- *       name: "Sculpture",
- *       score: 0.92,
- *       boundingBox: [...],
- *       translatedNames: { es: "Escultura", en: "Sculpture", qu: "..." },
- *       explanations: { es: "...", en: "...", qu: "..." }
- *     }
- *   ],
- *   explanationProvidedLangs: ['es','en','qu'],
- *   requestedLang: 'es'
- * }
+ * Ahora cada objeto/texto incluye:
+ * - explanations: { es: "texto completo", ... }
+ * - explanationsPreview: { es: "texto corto", ... }
  */
 async function processImageForCulture(imagePath, requestedLang = 'es', langsToReturn = DEFAULT_LANGS) {
   // 1) Vision analysis
@@ -170,10 +166,14 @@ async function processImageForCulture(imagePath, requestedLang = 'es', langsToRe
 
     // b) precompute explanations per language for this object
     let explanations = {};
+    let explanationsPreview = {};
     try {
-      explanations = await generateExplanationsForItem({ objectName: objName, labels, objects: [obj] }, langsToReturn);
+      const gen = await generateExplanationsForItem({ objectName: objName, labels, objects: [obj] }, langsToReturn);
+      explanations = gen.full || {};
+      explanationsPreview = gen.preview || {};
     } catch (e) {
       explanations = langsToReturn.reduce((acc, l) => (acc[l] = '', acc), {});
+      explanationsPreview = langsToReturn.reduce((acc, l) => (acc[l] = '', acc), {});
     }
 
     return {
@@ -181,21 +181,27 @@ async function processImageForCulture(imagePath, requestedLang = 'es', langsToRe
       score: objScore,
       boundingBox,
       translatedNames,
-      explanations
+      explanations,
+      explanationsPreview
     };
   }));
 
   // 4) Optionally: generate explanations for detected texts (if any)
   const textsProcessed = await Promise.all(texts.map(async (t) => {
     let expls = {};
+    let explsPreview = {};
     try {
-      expls = await generateExplanationsForItem({ text: t, labels, objects: visionObjects }, langsToReturn);
+      const gen = await generateExplanationsForItem({ text: t, labels, objects: visionObjects }, langsToReturn);
+      expls = gen.full || {};
+      explsPreview = gen.preview || {};
     } catch (e) {
       expls = langsToReturn.reduce((acc, l) => (acc[l] = '', acc), {});
+      explsPreview = langsToReturn.reduce((acc, l) => (acc[l] = '', acc), {});
     }
     return {
       text: t,
-      explanations: expls
+      explanations: expls,
+      explanationsPreview: explsPreview
     };
   }));
 
