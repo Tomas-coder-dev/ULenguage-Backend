@@ -25,7 +25,7 @@ function parseLangs(input) {
  */
 exports.analyzeAndExplain = async (req, res) => {
   if (!req.file || !req.file.path) {
-    return res.status(400).json({ error: 'No se subió ninguna imagen.' });
+    return res.status(400).json({ message: 'No se subió ninguna imagen.' });
   }
 
   const imagePath = req.file.path;
@@ -39,9 +39,8 @@ exports.analyzeAndExplain = async (req, res) => {
     const result = await processImageForCulture(imagePath, targetLang, langsToReturn);
     return res.json(result);
   } catch (error) {
-    console.error('OCR analyzeAndExplain error:', error);
-    const details = error && error.message ? error.message : String(error);
-    return res.status(500).json({ error: 'El análisis falló.', details });
+    console.error('[OCR][AnalyzeAndExplain][ERROR]', error);
+    return res.status(500).json({ message: 'Error al analizar imagen. Intenta nuevamente.' });
   } finally {
     // remove uploaded file (non-blocking). If you want to keep the file for debugging,
     // pass a flag like ?keepFile=1 from the client and check it here.
@@ -56,7 +55,7 @@ exports.analyzeAndExplain = async (req, res) => {
  */
 exports.analyzeExplainAndTranslate = async (req, res) => {
   if (!req.file || !req.file.path) {
-    return res.status(400).json({ error: 'No se subió ninguna imagen.' });
+    return res.status(400).json({ message: 'No se subió ninguna imagen.' });
   }
 
   const imagePath = req.file.path;
@@ -68,9 +67,8 @@ exports.analyzeExplainAndTranslate = async (req, res) => {
     const result = await processAndTranslate(imagePath, targetLang, langsToReturn);
     return res.json(result);
   } catch (error) {
-    console.error('OCR analyzeExplainAndTranslate error:', error);
-    const details = error && error.message ? error.message : String(error);
-    return res.status(500).json({ error: 'El análisis y traducción falló.', details });
+    console.error('[OCR][AnalyzeExplainAndTranslate][ERROR]', error);
+    return res.status(500).json({ message: 'Error al analizar y traducir imagen. Intenta nuevamente.' });
   } finally {
     fs.unlink(imagePath, () => {});
   }

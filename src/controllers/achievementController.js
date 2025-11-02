@@ -83,14 +83,9 @@ const unlockAchievement = async (req, res) => {
       reward: zone.reward_content
     });
   } catch (error) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[Achievement][ERROR]', error);
-    } else {
-      console.error('[PROD][Achievement][ERROR]', error.message);
-    }
+    console.error('[Achievement][ERROR]', error);
     res.status(500).json({ 
-      message: 'Error al desbloquear logro',
-      error: error.message 
+      message: 'Error al desbloquear logro. Intenta nuevamente.'
     });
   }
 };
@@ -158,9 +153,10 @@ const syncOfflineAchievements = async (req, res) => {
 
         results.synced.push(achievement);
       } catch (error) {
+        console.error('[Achievement][Sync][ERROR]', error);
         results.failed.push({ 
           zoneId: offlineAchievement.zoneId, 
-          reason: error.message 
+          reason: 'Error al procesar este logro' 
         });
       }
     }
@@ -170,10 +166,9 @@ const syncOfflineAchievements = async (req, res) => {
       results
     });
   } catch (error) {
-    console.error('Error al sincronizar logros:', error);
+    console.error('[Achievement][Sync][ERROR]', error);
     res.status(500).json({ 
-      message: 'Error al sincronizar logros',
-      error: error.message 
+      message: 'Error al sincronizar logros. Intenta nuevamente.'
     });
   }
 };
@@ -208,10 +203,9 @@ const getUserAchievements = async (req, res) => {
       stats
     });
   } catch (error) {
-    console.error('Error al obtener logros:', error);
+    console.error('[Achievement][GetUserAchievements][ERROR]', error);
     res.status(500).json({ 
-      message: 'Error al obtener logros',
-      error: error.message 
+      message: 'Error al obtener tus logros. Intenta nuevamente.'
     });
   }
 };
@@ -242,10 +236,9 @@ const getNearbyZones = async (req, res) => {
       zones
     });
   } catch (error) {
-    console.error('Error al buscar zonas cercanas:', error);
+    console.error('[Achievement][GetNearbyZones][ERROR]', error);
     res.status(500).json({ 
-      message: 'Error al buscar zonas cercanas',
-      error: error.message 
+      message: 'Error al buscar zonas cercanas. Intenta nuevamente.'
     });
   }
 };
@@ -266,10 +259,9 @@ const getAllZones = async (req, res) => {
       zones
     });
   } catch (error) {
-    console.error('Error al obtener zonas:', error);
+    console.error('[Achievement][GetAllZones][ERROR]', error);
     res.status(500).json({ 
-      message: 'Error al obtener zonas',
-      error: error.message 
+      message: 'Error al obtener zonas. Intenta nuevamente.'
     });
   }
 };

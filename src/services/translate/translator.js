@@ -1,6 +1,6 @@
 const { Translate } = require('@google-cloud/translate').v2;
 const QuechuaCusqueno = require('../../models/QuechuaCusqueno');
-const { scrapeGlosbe } = require('../glosbeScraper');
+const { scrapeGlosbe } = require('./glosbeScraper');
 
 const translate = new Translate();
 

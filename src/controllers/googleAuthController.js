@@ -114,12 +114,7 @@ const googleAuth = async (req, res) => {
     });
 
   } catch (error) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[GoogleAuth][ERROR]', error);
-    } else {
-      // Log en producción (sin stack, solo mensaje)
-      console.error(`[PROD][GoogleAuth][ERROR]`, error.message);
-    }
+    console.error('[GoogleAuth][ERROR]', error);
 
     if (error.message.includes('Token used too late')) {
       return res.status(401).json({ 
@@ -134,8 +129,7 @@ const googleAuth = async (req, res) => {
     }
 
     res.status(500).json({ 
-      message: 'Error al autenticar con Google',
-      error: error.message 
+      message: 'Error al autenticar con Google. Intenta nuevamente.'
     });
   }
 };
@@ -223,7 +217,7 @@ const googleCallback = async (req, res) => {
     }))}`);
 
   } catch (error) {
-    console.error('Error en callback de Google:', error);
+    console.error('[GoogleCallback][ERROR]', error);
     const frontendUrl = process.env.URL_FRONTEND || 'http://localhost:3000';
     res.redirect(`${frontendUrl}/auth/error?message=${encodeURIComponent('Error al autenticar con Google')}`);
   }

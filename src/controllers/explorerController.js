@@ -28,6 +28,7 @@ exports.getExplorerSites = async (req, res) => {
     ];
     res.status(200).json({ sites });
   } catch (error) {
-    res.status(500).json({ message: 'Error interno al obtener lugares turísticos' });
+    console.error('[Explorer][ERROR]', error);
+    res.status(500).json({ message: 'Error al obtener lugares turísticos. Intenta nuevamente.' });
   }
 };

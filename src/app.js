@@ -4,19 +4,30 @@ const dotenv = require('dotenv');
 const swaggerUi = require('swagger-ui-express');
 const yaml = require('yamljs');
 const path = require('path');
+const connectDB = require('./config/db');
 
 console.log('Iniciando ULenguage Backend...');
 dotenv.config();
 console.log('Variables de entorno cargadas.');
 
 let dbConnected = false;
-try {
-  require('./config/db')();
-  dbConnected = true;
-  console.log('Base de datos conectada exitosamente.');
-} catch (e) {
-  console.error('❌ Error conectando a la base de datos:', e);
-}
+
+const initializeDatabase = async () => {
+  if (dbConnected) {
+    return true;
+  }
+
+  try {
+    await connectDB();
+    dbConnected = true;
+    console.log('Base de datos conectada exitosamente.');
+    return true;
+  } catch (error) {
+    dbConnected = false;
+    console.error('❌ Error conectando a la base de datos:', error);
+    throw error;
+  }
+};
 
 const authRoutes = require('./routes/authRoutes');
 const planRoutes = require('./routes/planRoutes');
@@ -74,10 +85,12 @@ app.get('/', (req, res) => {
 });
 
 app.use((error, req, res, next) => {
-  console.error('Error middleware:', error);
-  res.status(500).json({ 
-    message: 'Error interno del servidor',
-    error: error.message
+  console.error('[ErrorMiddleware]', error);
+  if (res.headersSent) {
+    return next(error);
+  }
+  res.status(500).json({
+    message: 'Error interno del servidor. Intenta nuevamente.'
   });
 });
 
@@ -87,9 +100,18 @@ app.use((error, req, res, next) => {
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
   const HOST = process.env.HOST || '0.0.0.0'; // 0.0.0.0 allows other devices in LAN to connect
-  app.listen(PORT, HOST, () => {
-    console.log(`Server listening on http://${HOST}:${PORT}`);
-  });
+
+  initializeDatabase()
+    .catch(() => {
+      console.warn('⚠️  Servidor iniciando sin conexión a la base de datos.');
+    })
+    .finally(() => {
+      app.listen(PORT, HOST, () => {
+        console.log(`Server listening on http://${HOST}:${PORT}`);
+      });
+    });
 }
 
 module.exports = app;
+module.exports.initializeDatabase = initializeDatabase;
+module.exports.isDatabaseConnected = () => dbConnected;

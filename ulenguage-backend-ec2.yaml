@@ -162,15 +162,26 @@ Resources:
           #!/bin/bash
           # Actualiza e instala dependencias
           apt-get update -y
-          apt-get upgrade -y
-          apt-get install -y git curl build-essential mongodb
+          DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --quiet
+          apt-get install -y git curl build-essential wget gnupg
+          # Instala MongoDB Community Edition 6.0
+          wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
+          echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+          apt-get update -y
+          apt-get install -y mongodb-org
+          systemctl enable mongod
+          systemctl start mongod
+          # Reinicia servicios críticos tras upgrade para evitar problemas de librerías desactualizadas
+          systemctl restart ssh
+          systemctl restart mongod
+          systemctl restart systemd-journald
+          systemctl restart systemd-networkd
+          systemctl restart systemd-resolved
+          systemctl restart systemd-udevd
           # Instala Node.js LTS
           curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
           apt-get install -y nodejs
           npm install -g pm2
-          # Inicia MongoDB
-          systemctl start mongodb
-          systemctl enable mongodb
           # Clona el repo
           cd /home/ubuntu
           git clone ${GitRepoUrl} ulenguage-backend

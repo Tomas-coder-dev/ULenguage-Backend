@@ -14,13 +14,9 @@ const executeSeed = async (req, res) => {
       ...result
     });
   } catch (error) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[Seed][ERROR]', error);
-    } else {
-      console.error('[PROD][Seed][ERROR]', error.message);
-    }
+    console.error('[Seed][ERROR]', error);
     res.status(500).json({ 
-      message: 'Error interno del servidor al ejecutar seeders' 
+      message: 'Error al ejecutar seeders. Intenta nuevamente.' 
     });
   }
 };

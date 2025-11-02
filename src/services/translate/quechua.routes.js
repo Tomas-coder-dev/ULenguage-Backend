@@ -6,14 +6,14 @@ const QuechuaCusqueno = require('../../models/QuechuaCusqueno');
 router.post('/add', async (req, res) => {
   const { spanish, quechua_cusqueno, context, category, examples } = req.body;
   if (!spanish || !quechua_cusqueno) {
-    return res.status(400).json({ error: "Faltan campos obligatorios" });
+    return res.status(400).json({ message: 'Faltan campos obligatorios' });
   }
   const spanishNorm = spanish.trim().toLowerCase();
   try {
     // Verifica duplicado
     const exists = await QuechuaCusqueno.findOne({ spanish: spanishNorm });
     if (exists) {
-      return res.status(409).json({ error: "El término ya existe." });
+      return res.status(409).json({ message: 'El término ya existe.' });
     }
     const term = await QuechuaCusqueno.create({ 
       spanish: spanishNorm, 
@@ -23,8 +23,9 @@ router.post('/add', async (req, res) => {
       examples 
     });
     res.json(term);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error('[Quechua][Add][ERROR]', error);
+    res.status(500).json({ message: 'Error al agregar término. Intenta nuevamente.' });
   }
 });
 
@@ -32,15 +33,16 @@ router.post('/add', async (req, res) => {
 router.get('/search', async (req, res) => {
   const { spanish } = req.query;
   if (!spanish) {
-    return res.status(400).json({ error: "Parámetro 'spanish' requerido" });
+    return res.status(400).json({ message: "Parámetro 'spanish' requerido" });
   }
   const spanishNorm = spanish.trim().toLowerCase();
   try {
     const term = await QuechuaCusqueno.findOne({ spanish: spanishNorm });
     if (term) return res.json(term);
-    res.status(404).json({ error: "Término no encontrado" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(404).json({ message: 'Término no encontrado' });
+  } catch (error) {
+    console.error('[Quechua][Search][ERROR]', error);
+    res.status(500).json({ message: 'Error al buscar término. Intenta nuevamente.' });
   }
 });
 
@@ -49,8 +51,9 @@ router.get('/all', async (req, res) => {
   try {
     const terms = await QuechuaCusqueno.find();
     res.json(terms);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error('[Quechua][All][ERROR]', error);
+    res.status(500).json({ message: 'Error al obtener términos. Intenta nuevamente.' });
   }
 });
 

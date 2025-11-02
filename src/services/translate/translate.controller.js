@@ -1,9 +1,9 @@
-const { translateTextHybridDetailed, translateTextHybrid } = require('./translate/translator');
+const { translateTextHybridDetailed, translateTextHybrid } = require('./translator');
 
 exports.translateText = async (req, res) => {
   const { text, source, target } = req.body;
   if (!text || !source || !target) {
-    return res.status(400).json({ error: "Faltan parámetros: 'text', 'source', 'target'." });
+    return res.status(400).json({ message: "Faltan parámetros: 'text', 'source', 'target'." });
   }
 
   try {
@@ -20,13 +20,20 @@ exports.translateText = async (req, res) => {
       variantUsed: result.variantUsed
     });
   } catch (error) {
-    console.error('translate.controller error:', error);
+    console.error('[Translate][ERROR]', error);
     // fallback to legacy behavior
     try {
       const translatedText = await translateTextHybrid(text, source, target);
-      return res.json({ originalText: text, translatedText, sourceLanguage: source, targetLanguage: target, provider: 'fallback' });
+      return res.json({ 
+        originalText: text, 
+        translatedText, 
+        sourceLanguage: source, 
+        targetLanguage: target, 
+        provider: 'fallback' 
+      });
     } catch (err) {
-      return res.status(500).json({ error: "Error durante la traducción.", details: err.message || error.message });
+      console.error('[Translate][Fallback][ERROR]', err);
+      return res.status(500).json({ message: 'Error al traducir texto. Intenta nuevamente.' });
     }
   }
 };

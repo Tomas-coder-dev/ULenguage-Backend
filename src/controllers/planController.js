@@ -11,12 +11,8 @@ const getPlans = async (req, res) => {
     }
     res.status(200).json(plans);
   } catch (error) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[Plans][ERROR]', error);
-    } else {
-      console.error('[PROD][Plans][ERROR]', error.message);
-    }
-    res.status(500).json({ message: 'Error interno del servidor' });
+    console.error('[Plans][ERROR]', error);
+    res.status(500).json({ message: 'Error al obtener planes. Intenta nuevamente.' });
   }
 };
 

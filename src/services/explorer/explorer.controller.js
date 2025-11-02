@@ -53,7 +53,8 @@ exports.getPlaces = async (req, res) => {
     }));
 
     res.json({ places });
-  } catch (err) {
-    res.status(500).json({ error: 'Error al obtener lugares turísticos de Cusco', details: err.message });
+  } catch (error) {
+    console.error('[ExplorerService][ERROR]', error);
+    res.status(500).json({ message: 'Error al obtener lugares turísticos. Intenta nuevamente.' });
   }
 };
