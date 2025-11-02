@@ -3,27 +3,31 @@ const { seedContent } = require('./contentSeeder');
 const seedZones = require('./zoneSeeder');
 const seedAchievements = require('./achievementSeeder');
 const seedUsers = require('./userSeeder');
+const seedQuechua = require('./quechuaSeeder'); // <-- nuevo seeder agregado
 
 const runAllSeeders = async () => {
   try {
     console.log('🌱 Iniciando proceso de seeders...');
     
-  // Sembrar usuarios
-  await seedUsers();
+    // Sembrar usuarios
+    await seedUsers();
 
-  // Sembrar planes
-  await seedPlans();
+    // Sembrar planes
+    await seedPlans();
 
-  // Sembrar contenido cultural
-  await seedContent();
+    // Sembrar contenido cultural
+    await seedContent();
 
-  // Sembrar zonas turísticas
-  await seedZones();
+    // Sembrar zonas turísticas
+    await seedZones();
 
-  // Sembrar logros (achievements)
-  await seedAchievements();
+    // Sembrar logros (achievements)
+    await seedAchievements();
 
-  console.log('🎉 Todos los seeders completados exitosamente');
+    // Sembrar diccionario Quechua
+    await seedQuechua();
+
+    console.log('🎉 Todos los seeders completados exitosamente');
     
     return {
       success: true,

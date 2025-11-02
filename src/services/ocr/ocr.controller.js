@@ -43,7 +43,8 @@ exports.analyzeAndExplain = async (req, res) => {
     const details = error && error.message ? error.message : String(error);
     return res.status(500).json({ error: 'El análisis falló.', details });
   } finally {
-    // remove uploaded file (non-blocking)
+    // remove uploaded file (non-blocking). If you want to keep the file for debugging,
+    // pass a flag like ?keepFile=1 from the client and check it here.
     fs.unlink(imagePath, () => {});
   }
 };

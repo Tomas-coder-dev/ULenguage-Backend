@@ -6,6 +6,12 @@
  * - explanationsPreview: mapa con textos cortos (p. ej. 220 chars) para listados
  *
  * Resto de comportamiento idéntico: Vision -> Gemini -> traducción híbrida.
+ *
+ * Mejoras añadidas:
+ * - robustez y timeouts alrededor de llamadas a servicios externos
+ * - normalización consistente de códigos de idioma
+ * - manejo de errores por item para evitar que un fallo detenga todo
+ * - pequeñas defensas (arrays/empty checks, dedupe labels)
  */
 
 const { analyzeImageWithVision } = require('./vision.service');
@@ -57,17 +63,25 @@ function makeFull(text, maxChars = MAX_FULL_LENGTH) {
   return s.slice(0, maxChars - 3).trim() + '...';
 }
 
+function ensureArray(v) {
+  if (!v) return [];
+  if (Array.isArray(v)) return v;
+  return [v];
+}
+
 /**
  * Genera explicaciones para un texto/objeto en todos los idiomas pedidos.
  * Devuelve: { full: {es: '', en: '', qu: ''}, preview: {es:'', ...} }
+ *
+ * - Envuelve llamadas a getCulturalExplanation con timeout y defensas.
  */
 async function generateExplanationsForItem(input, langs = DEFAULT_LANGS) {
   const full = {};
   const preview = {};
+  const langsNormalized = (langs || DEFAULT_LANGS).map(normalizeLangCode);
 
-  await Promise.all(langs.map(async (lang) => {
+  await Promise.all(langsNormalized.map(async (lang) => {
     try {
-      // getCulturalExplanation puede devolver string o { explanation, lang }
       const raw = await withTimeout(
         getCulturalExplanation(input.text || input.objectName || '', input.labels || [], input.objects || [], lang),
         30000,
@@ -79,8 +93,16 @@ async function generateExplanationsForItem(input, langs = DEFAULT_LANGS) {
         explanation = '';
       } else if (typeof raw === 'string') {
         explanation = raw;
-      } else if (typeof raw === 'object' && raw.explanation) {
-        explanation = raw.explanation;
+      } else if (typeof raw === 'object') {
+        // Some implementations can return { explanation, lang } or { es: "...", en: "..." }
+        if (raw.explanation && typeof raw.explanation === 'string') {
+          explanation = raw.explanation;
+        } else if (raw[lang] && typeof raw[lang] === 'string') {
+          explanation = raw[lang];
+        } else {
+          // fallback to JSON stringify (safe)
+          explanation = JSON.stringify(raw);
+        }
       } else {
         explanation = String(raw);
       }
@@ -88,12 +110,12 @@ async function generateExplanationsForItem(input, langs = DEFAULT_LANGS) {
       explanation = safeString(explanation);
 
       // store full (with a high cap) and preview (short)
-      full[normalizeLangCode(lang)] = makeFull(explanation);
-      preview[normalizeLangCode(lang)] = makePreview(explanation);
+      full[lang] = makeFull(explanation);
+      preview[lang] = makePreview(explanation);
     } catch (err) {
       console.error(`generateExplanationsForItem error for lang=${lang}:`, err?.message || err);
-      full[normalizeLangCode(lang)] = '';
-      preview[normalizeLangCode(lang)] = '';
+      full[lang] = '';
+      preview[lang] = '';
     }
   }));
 
@@ -103,17 +125,20 @@ async function generateExplanationsForItem(input, langs = DEFAULT_LANGS) {
 /**
  * Traduce un nombre corto (objeto) a todos los idiomas pedidos usando translateTextHybrid.
  * Devuelve: { es: "", en: "", qu: "" } (valores vacíos si falla).
+ *
+ * Usamos withTimeout para evitar bloqueos.
  */
 async function translateNameAllLangs(name, sourceLang = 'und', langs = DEFAULT_LANGS) {
   const results = {};
-  await Promise.all(langs.map(async (lang) => {
+  const langsNormalized = (langs || DEFAULT_LANGS).map(normalizeLangCode);
+  await Promise.all(langsNormalized.map(async (lang) => {
     try {
       if (!name) {
-        results[normalizeLangCode(lang)] = '';
+        results[lang] = '';
         return;
       }
-      if (normalizeLangCode(lang) === normalizeLangCode(sourceLang)) {
-        results[normalizeLangCode(lang)] = name;
+      if (lang === normalizeLangCode(sourceLang)) {
+        results[lang] = name;
         return;
       }
       const tr = await withTimeout(
@@ -121,10 +146,10 @@ async function translateNameAllLangs(name, sourceLang = 'und', langs = DEFAULT_L
         8000,
         ''
       );
-      results[normalizeLangCode(lang)] = (tr || '').trim();
+      results[lang] = (tr || '').trim();
     } catch (err) {
       console.warn(`translateNameAllLangs failed ${sourceLang}->${lang}:`, err?.message || err);
-      results[normalizeLangCode(lang)] = '';
+      results[lang] = '';
     }
   }));
   return results;
@@ -135,74 +160,103 @@ async function translateNameAllLangs(name, sourceLang = 'und', langs = DEFAULT_L
  * Ahora cada objeto/texto incluye:
  * - explanations: { es: "texto completo", ... }
  * - explanationsPreview: { es: "texto corto", ... }
+ *
+ * Mejoras:
+ * - defensas contra valores nulos
+ * - dedupe de labels
+ * - timeouts y manejo por item para que un fallo no cancele todo
  */
 async function processImageForCulture(imagePath, requestedLang = 'es', langsToReturn = DEFAULT_LANGS) {
-  // 1) Vision analysis
-  const visionResult = await analyzeImageWithVision(imagePath, langsToReturn);
-  const textRaw = visionResult.text || '';
-  const detectedLang = visionResult.lang || 'und';
-  const labels = Array.isArray(visionResult.labels) ? visionResult.labels : [];
-  const visionObjects = Array.isArray(visionResult.objects) ? visionResult.objects : [];
+  // 1) Vision analysis (envuelto en try para fallback)
+  let visionResult = {};
+  try {
+    visionResult = await withTimeout(analyzeImageWithVision(imagePath, langsToReturn), 30000, {});
+  } catch (err) {
+    console.warn('analyzeImageWithVision failed:', err?.message || err);
+    visionResult = {};
+  }
 
-  // 2) Normalize texts
+  const textRaw = safeString(visionResult.text || '');
+  const detectedLang = visionResult.lang ? normalizeLangCode(visionResult.lang) : 'und';
+
+  const rawLabels = ensureArray(visionResult.labels).map(l => safeString(l)).filter(Boolean);
+  // dedupe labels
+  const labels = Array.from(new Set(rawLabels));
+
+  const visionObjects = ensureArray(visionResult.objects);
+
+  // 2) Normalize texts (split lines, trim)
   const texts = textRaw
     .split('\n')
     .map(t => t.trim())
     .filter(Boolean);
 
-  // 3) Process objects in parallel
+  // 3) Process objects in parallel with item-level error handling
+  const langsNormalized = (langsToReturn || DEFAULT_LANGS).map(normalizeLangCode);
+
   const objectsProcessed = await Promise.all(visionObjects.map(async (obj) => {
-    const objName = obj.name || '';
-    const objScore = typeof obj.score === 'number' ? obj.score : (obj.score ? Number(obj.score) : 0);
-    const boundingBox = obj.boundingBox || obj.boundingPoly || null;
-
-    // a) precompute translated names (optional but helpful for UI)
-    let translatedNames = {};
     try {
-      translatedNames = await translateNameAllLangs(objName, detectedLang, langsToReturn);
-    } catch (e) {
-      translatedNames = langsToReturn.reduce((acc, l) => (acc[l] = '', acc), {});
-    }
+      const objName = safeString(obj.name || '');
+      const objScore = (typeof obj.score === 'number') ? obj.score : (obj.score ? Number(obj.score) : 0);
+      const boundingBox = obj.boundingBox || obj.boundingPoly || null;
 
-    // b) precompute explanations per language for this object
-    let explanations = {};
-    let explanationsPreview = {};
-    try {
-      const gen = await generateExplanationsForItem({ objectName: objName, labels, objects: [obj] }, langsToReturn);
-      explanations = gen.full || {};
-      explanationsPreview = gen.preview || {};
-    } catch (e) {
-      explanations = langsToReturn.reduce((acc, l) => (acc[l] = '', acc), {});
-      explanationsPreview = langsToReturn.reduce((acc, l) => (acc[l] = '', acc), {});
-    }
+      // a) precompute translated names (optional but helpful for UI)
+      let translatedNames = {};
+      try {
+        translatedNames = await translateNameAllLangs(objName, detectedLang, langsNormalized);
+      } catch (e) {
+        translatedNames = langsNormalized.reduce((acc, l) => { acc[l] = ''; return acc; }, {});
+      }
 
-    return {
-      name: objName,
-      score: objScore,
-      boundingBox,
-      translatedNames,
-      explanations,
-      explanationsPreview
-    };
+      // b) precompute explanations per language for this object
+      let explanations = {};
+      let explanationsPreview = {};
+      try {
+        const gen = await generateExplanationsForItem({ objectName: objName, labels, objects: [obj] }, langsNormalized);
+        explanations = gen.full || {};
+        explanationsPreview = gen.preview || {};
+      } catch (e) {
+        explanations = langsNormalized.reduce((acc, l) => { acc[l] = ''; return acc; }, {});
+        explanationsPreview = langsNormalized.reduce((acc, l) => { acc[l] = ''; return acc; }, {});
+      }
+
+      return {
+        name: objName,
+        score: objScore,
+        boundingBox,
+        translatedNames,
+        explanations,
+        explanationsPreview
+      };
+    } catch (err) {
+      console.error('Error processing object:', err?.message || err);
+      return {
+        name: safeString(obj && obj.name ? obj.name : ''),
+        score: typeof obj.score === 'number' ? obj.score : 0,
+        boundingBox: obj.boundingBox || obj.boundingPoly || null,
+        translatedNames: langsNormalized.reduce((acc, l) => { acc[l] = ''; return acc; }, {}),
+        explanations: langsNormalized.reduce((acc, l) => { acc[l] = ''; return acc; }, {}),
+        explanationsPreview: langsNormalized.reduce((acc, l) => { acc[l] = ''; return acc; }, {})
+      };
+    }
   }));
 
   // 4) Optionally: generate explanations for detected texts (if any)
   const textsProcessed = await Promise.all(texts.map(async (t) => {
-    let expls = {};
-    let explsPreview = {};
     try {
-      const gen = await generateExplanationsForItem({ text: t, labels, objects: visionObjects }, langsToReturn);
-      expls = gen.full || {};
-      explsPreview = gen.preview || {};
+      const gen = await generateExplanationsForItem({ text: t, labels, objects: visionObjects }, langsNormalized);
+      return {
+        text: t,
+        explanations: gen.full || {},
+        explanationsPreview: gen.preview || {}
+      };
     } catch (e) {
-      expls = langsToReturn.reduce((acc, l) => (acc[l] = '', acc), {});
-      explsPreview = langsToReturn.reduce((acc, l) => (acc[l] = '', acc), {});
+      return {
+        text: t,
+        explanations: langsNormalized.reduce((acc, l) => { acc[l] = ''; return acc; }, {}),
+        explanationsPreview: langsNormalized.reduce((acc, l) => { acc[l] = ''; return acc; }, {})
+      };
     }
-    return {
-      text: t,
-      explanations: expls,
-      explanationsPreview: explsPreview
-    };
   }));
 
   // 5) Build response
@@ -211,7 +265,7 @@ async function processImageForCulture(imagePath, requestedLang = 'es', langsToRe
     detectedLang,
     labels,
     objects: objectsProcessed,
-    explanationProvidedLangs: langsToReturn.map(normalizeLangCode),
+    explanationProvidedLangs: langsNormalized,
     requestedLang: normalizeLangCode(requestedLang)
   };
 
