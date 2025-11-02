@@ -35,9 +35,23 @@ const runAllSeeders = async () => {
       timestamp: new Date()
     };
   } catch (error) {
-    console.error('💥 Error en el proceso de seeders:', error.message);
+    console.error('💥 Error en el proceso de seeders:', error.message || error);
     throw error;
   }
 };
 
 module.exports = { runAllSeeders };
+
+// Ejecutable directamente desde la CLI: node src/seeders/index.js
+if (require.main === module) {
+  // Si quieres forzar la URI desde la línea de comandos, exporta MONGO_URI en la sesión antes de ejecutar.
+  runAllSeeders()
+    .then(res => {
+      console.log('✅ runAllSeeders result:', res);
+      process.exit(0);
+    })
+    .catch(err => {
+      console.error('❌ runAllSeeders fallo:', err);
+      process.exit(1);
+    });
+}

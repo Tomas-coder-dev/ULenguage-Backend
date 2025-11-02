@@ -17,7 +17,7 @@ const path = require('path');
 const fs = require('fs');
 const argv = require('yargs').argv;
 
-// Cargar .env si existe (permitir node -r dotenv/config o require here)
+// Cargar .env si existe (permite node -r dotenv/config o require here)
 try { require('dotenv').config(); } catch (e) { /* ignore if dotenv not installed */ }
 
 const mongoUri = argv.mongo || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ulenguage';
@@ -446,15 +446,14 @@ function extractQuechuaValue(it) {
     'quetchua',
     'quenchua',
     'quchua',
-    'qu'
+    'qu',
+    'term' // some content arrays use `term`
   ];
   for (const k of keys) {
     if (Object.prototype.hasOwnProperty.call(it, k) && it[k] != null && String(it[k]).trim() !== '') {
       return normalizeQuechua(it[k]);
     }
   }
-  // fallback: if item uses 'term' as the quechua word (some content arrays)
-  if (it.term && typeof it.term === 'string') return normalizeQuechua(it.term);
   // last resort: first non-empty string property
   for (const v of Object.values(it)) {
     if (typeof v === 'string' && v.trim().length > 0) return v.trim();
