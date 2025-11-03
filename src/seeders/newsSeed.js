@@ -173,11 +173,20 @@ const seedNews = async () => {
   try {
     console.log('🌱 Iniciando seed de noticias culturales...');
 
-    // Limpiar noticias existentes (opcional)
-    await News.deleteMany({});
-    console.log('🗑️  Noticias anteriores eliminadas.');
+    // Verificar si ya existen noticias
+    const existingCount = await News.countDocuments();
+    
+    if (existingCount > 0) {
+      console.log(`ℹ️  Ya existen ${existingCount} noticias en la base de datos.`);
+      console.log('⏭️  Saltando seed de noticias (use deleteMany si desea resetear).');
+      return {
+        success: true,
+        count: existingCount,
+        skipped: true
+      };
+    }
 
-    // Insertar nuevas noticias
+    // Insertar nuevas noticias solo si no existen
     const news = await News.insertMany(newsData);
     console.log(`✅ ${news.length} noticias insertadas correctamente.`);
 
