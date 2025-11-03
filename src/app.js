@@ -48,6 +48,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Middleware de logging/auditoría
+const logRequest = require('./middlewares/loggerMiddleware');
+app.use(logRequest);
+
 app.use('/api/auth', authRoutes);
 app.use('/api/planes', planRoutes);
 app.use('/api/seed', seedRoutes);

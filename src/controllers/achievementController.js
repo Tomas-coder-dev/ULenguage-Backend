@@ -7,15 +7,17 @@ const Zone = require('../models/Zone');
  * @access Private
  */
 const unlockAchievement = async (req, res) => {
+  console.log('[🏆 ACHIEVEMENT] Solicitud de desbloqueo de logro');
+  
   try {
     const { lat, lon, zoneId, method = 'gps' } = req.body;
     const userId = req.user._id;
 
+    console.log(`[🔍 ACHIEVEMENT] Usuario: ${userId} | Zona: ${zoneId} | Método: ${method}`);
+
     // Validar datos requeridos
     if (lat === undefined || lon === undefined || !zoneId) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[Achievement] Faltan datos requeridos:`, req.body);
-      }
+      console.log('[❌ ACHIEVEMENT] Faltan datos requeridos');
       return res.status(400).json({ 
         message: 'Faltan datos requeridos: lat, lon, zoneId' 
       });
@@ -24,9 +26,7 @@ const unlockAchievement = async (req, res) => {
     // Verificar si la zona existe
     const zone = await Zone.findOne({ zone_id: zoneId, active: true });
     if (!zone) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[Achievement] Zona no encontrada o inactiva: ${zoneId}`);
-      }
+      console.log(`[❌ ACHIEVEMENT] Zona no encontrada o inactiva: ${zoneId}`);
       return res.status(404).json({ 
         message: 'Zona no encontrada o inactiva' 
       });
@@ -35,9 +35,7 @@ const unlockAchievement = async (req, res) => {
     // Verificar si el usuario ya tiene este logro
     const hasAchievement = await Achievement.hasAchievement(userId, zoneId);
     if (hasAchievement) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[Achievement] Usuario ya tiene el logro: user=${userId}, zone=${zoneId}`);
-      }
+      console.log(`[⚠️ ACHIEVEMENT] Usuario ya tiene este logro: ${zoneId}`);
       return res.status(400).json({ 
         message: 'Ya has desbloqueado este logro',
         achievement: await Achievement.findOne({ user_id: userId, zone_id: zoneId })
@@ -48,9 +46,7 @@ const unlockAchievement = async (req, res) => {
     if (method === 'gps') {
       const isWithinRadius = zone.isWithinRadius(lon, lat);
       if (!isWithinRadius) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`[Achievement] Usuario fuera de radio: user=${userId}, zone=${zoneId}`);
-        }
+        console.log(`[❌ ACHIEVEMENT] Usuario fuera del radio de la zona: ${zoneId}`);
         return res.status(400).json({ 
           message: 'No estás dentro del área de la zona',
           distance_hint: 'Debes estar más cerca del lugar'
@@ -72,18 +68,15 @@ const unlockAchievement = async (req, res) => {
       content_unlocked: zone.reward_content
     });
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[Achievement] Logro desbloqueado: user=${userId}, zone=${zoneId}`);
-    } else {
-      console.log(`[PROD][Achievement] Logro desbloqueado: user=${userId}, zone=${zoneId}`);
-    }
+    console.log(`[✅ ACHIEVEMENT] Logro desbloqueado exitosamente: ${zone.name_es} | Usuario: ${userId}`);
+    
     res.status(201).json({
       message: '🎉 ¡Logro desbloqueado!',
       achievement,
       reward: zone.reward_content
     });
   } catch (error) {
-    console.error('[Achievement][ERROR]', error);
+    console.error('[❌ ACHIEVEMENT] Error al desbloquear logro:', error.message);
     res.status(500).json({ 
       message: 'Error al desbloquear logro. Intenta nuevamente.'
     });
@@ -96,15 +89,20 @@ const unlockAchievement = async (req, res) => {
  * @access Private
  */
 const syncOfflineAchievements = async (req, res) => {
+  console.log('[🔄 ACHIEVEMENT] Iniciando sincronización de logros offline');
+  
   try {
     const { achievements } = req.body; // Array de logros offline
     const userId = req.user._id;
 
     if (!Array.isArray(achievements) || achievements.length === 0) {
+      console.log('[❌ ACHIEVEMENT] No se recibieron logros para sincronizar');
       return res.status(400).json({ 
         message: 'No se enviaron logros para sincronizar' 
       });
     }
+
+    console.log(`[🔍 ACHIEVEMENT] Sincronizando ${achievements.length} logros del usuario: ${userId}`);
 
     const results = {
       synced: [],
@@ -153,7 +151,7 @@ const syncOfflineAchievements = async (req, res) => {
 
         results.synced.push(achievement);
       } catch (error) {
-        console.error('[Achievement][Sync][ERROR]', error);
+        console.error('[❌ ACHIEVEMENT] Error al procesar logro individual:', error.message);
         results.failed.push({ 
           zoneId: offlineAchievement.zoneId, 
           reason: 'Error al procesar este logro' 
@@ -161,12 +159,14 @@ const syncOfflineAchievements = async (req, res) => {
       }
     }
 
+    console.log(`[✅ ACHIEVEMENT] Sincronización completada: ${results.synced.length} exitosos, ${results.failed.length} fallidos, ${results.duplicates.length} duplicados`);
+
     res.status(200).json({
       message: 'Sincronización completada',
       results
     });
   } catch (error) {
-    console.error('[Achievement][Sync][ERROR]', error);
+    console.error('[❌ ACHIEVEMENT] Error general en sincronización:', error.message);
     res.status(500).json({ 
       message: 'Error al sincronizar logros. Intenta nuevamente.'
     });
@@ -179,6 +179,8 @@ const syncOfflineAchievements = async (req, res) => {
  * @access Private
  */
 const getUserAchievements = async (req, res) => {
+  console.log(`[🏆 ACHIEVEMENT] Solicitando logros del usuario: ${req.user._id}`);
+  
   try {
     const userId = req.user._id;
     
@@ -198,12 +200,14 @@ const getUserAchievements = async (req, res) => {
       }
     };
 
+    console.log(`[✅ ACHIEVEMENT] ${achievements.length} logros encontrados para el usuario`);
+
     res.status(200).json({
       achievements,
       stats
     });
   } catch (error) {
-    console.error('[Achievement][GetUserAchievements][ERROR]', error);
+    console.error('[❌ ACHIEVEMENT] Error al obtener logros del usuario:', error.message);
     res.status(500).json({ 
       message: 'Error al obtener tus logros. Intenta nuevamente.'
     });
@@ -216,6 +220,7 @@ const getUserAchievements = async (req, res) => {
  * @access Public
  */
 const getNearbyZones = async (req, res) => {
+  console.log('[📍 ZONES] Solicitando zonas cercanas');
   try {
     const { lat, lon, radius = 5000 } = req.query;
 

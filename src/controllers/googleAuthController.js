@@ -33,6 +33,8 @@ const client = new OAuth2Client(
  * @access Public
  */
 const googleAuth = async (req, res) => {
+  console.log('[🔐 AUTH] Iniciando autenticación con Google OAuth2');
+  
   try {
     const { tokenId, idToken, token: googleToken } = req.body;
 
@@ -40,13 +42,13 @@ const googleAuth = async (req, res) => {
     const authToken = tokenId || idToken || googleToken;
 
     if (!authToken) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[GoogleAuth] Token de Google no recibido en request:', req.body);
-      }
+      console.log('[❌ AUTH] Token de Google no recibido en request');
       return res.status(400).json({ 
         message: 'Token de Google es requerido (tokenId, idToken o token)' 
       });
     }
+
+    console.log('[🔍 AUTH] Verificando token con Google...');
 
     // Verificar el token con Google
     const ticket = await client.verifyIdToken({
@@ -56,12 +58,12 @@ const googleAuth = async (req, res) => {
 
     const payload = ticket.getPayload();
     const { sub: googleId, email, name, picture } = payload;
+    
+    console.log(`[✅ AUTH] Token verificado para: ${email} (Google ID: ${googleId})`);
 
     // Verificar que el email esté verificado
     if (!payload.email_verified) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[GoogleAuth] Email de Google no verificado:', email);
-      }
+      console.log(`[❌ AUTH] Email de Google no verificado: ${email}`);
       return res.status(400).json({ 
         message: 'Email de Google no verificado' 
       });
@@ -76,9 +78,9 @@ const googleAuth = async (req, res) => {
         user.googleId = googleId;
         user.avatar = picture || user.avatar;
         await user.save();
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`[GoogleAuth] Usuario existente vinculado a Google: ${email}`);
-        }
+        console.log(`[🔗 AUTH] Usuario existente vinculado a Google: ${email}`);
+      } else {
+        console.log(`[👤 AUTH] Usuario existente autenticado: ${email}`);
       }
     } else {
       // Crear nuevo usuario con Google
@@ -90,18 +92,13 @@ const googleAuth = async (req, res) => {
         password: Math.random().toString(36).slice(-8), // Password temporal (no se usará)
         plan: 'free'
       });
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[GoogleAuth] Nuevo usuario creado con Google: ${email}`);
-      }
+      console.log(`[✨ AUTH] Nuevo usuario creado con Google: ${email} (ID: ${user._id})`);
     }
 
     // Generar JWT
     const token = generateToken(user._id);
 
-    if (process.env.NODE_ENV === 'production') {
-      // Log en producción (solo info relevante, sin datos sensibles)
-      console.log(`[PROD][GoogleAuth] Login Google para usuario: ${email}, id: ${user._id}`);
-    }
+    console.log(`[🎫 AUTH] Token JWT generado para usuario: ${email}`);
 
     res.status(200).json({
       _id: user._id,
@@ -114,7 +111,7 @@ const googleAuth = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[GoogleAuth][ERROR]', error);
+    console.error('[❌ AUTH] Error en autenticación Google:', error.message);
 
     if (error.message.includes('Token used too late')) {
       return res.status(401).json({ 

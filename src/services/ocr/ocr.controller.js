@@ -24,12 +24,17 @@ function parseLangs(input) {
  * - Otherwise we only request the single requestedLang to avoid extra LLM calls.
  */
 exports.analyzeAndExplain = async (req, res) => {
+  console.log('[📸 OCR] Iniciando análisis de imagen');
+  
   if (!req.file || !req.file.path) {
+    console.log('[❌ OCR] No se recibió archivo de imagen');
     return res.status(400).json({ message: 'No se subió ninguna imagen.' });
   }
 
   const imagePath = req.file.path;
   const targetLang = (req.body.targetLang || req.query.targetLang || 'es').trim().toLowerCase();
+
+  console.log(`[🔍 OCR] Procesando imagen: ${req.file.originalname} | Idioma: ${targetLang}`);
 
   // If client explicitly provided langs, parse them; otherwise default to only targetLang
   const explicitLangs = req.body.langs || req.query.langs;
@@ -37,9 +42,10 @@ exports.analyzeAndExplain = async (req, res) => {
 
   try {
     const result = await processImageForCulture(imagePath, targetLang, langsToReturn);
+    console.log(`[✅ OCR] Análisis completado exitosamente`);
     return res.json(result);
   } catch (error) {
-    console.error('[OCR][AnalyzeAndExplain][ERROR]', error);
+    console.error('[❌ OCR] Error al analizar imagen:', error.message);
     return res.status(500).json({ message: 'Error al analizar imagen. Intenta nuevamente.' });
   } finally {
     // remove uploaded file (non-blocking). If you want to keep the file for debugging,
@@ -54,7 +60,10 @@ exports.analyzeAndExplain = async (req, res) => {
  * Delegates to processAndTranslate (currently an alias of processImageForCulture).
  */
 exports.analyzeExplainAndTranslate = async (req, res) => {
+  console.log('[📸 OCR] Iniciando análisis y traducción de imagen');
+  
   if (!req.file || !req.file.path) {
+    console.log('[❌ OCR] No se recibió archivo de imagen');
     return res.status(400).json({ message: 'No se subió ninguna imagen.' });
   }
 
@@ -63,11 +72,14 @@ exports.analyzeExplainAndTranslate = async (req, res) => {
   const explicitLangs = req.body.langs || req.query.langs;
   const langsToReturn = explicitLangs ? parseLangs(explicitLangs) : [targetLang];
 
+  console.log(`[🔍 OCR] Procesando y traduciendo imagen: ${req.file.originalname} | Idioma: ${targetLang}`);
+
   try {
     const result = await processAndTranslate(imagePath, targetLang, langsToReturn);
+    console.log(`[✅ OCR] Análisis y traducción completados exitosamente`);
     return res.json(result);
   } catch (error) {
-    console.error('[OCR][AnalyzeExplainAndTranslate][ERROR]', error);
+    console.error('[❌ OCR] Error al analizar y traducir:', error.message);
     return res.status(500).json({ message: 'Error al analizar y traducir imagen. Intenta nuevamente.' });
   } finally {
     fs.unlink(imagePath, () => {});
