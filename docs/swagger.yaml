@@ -277,3 +277,89 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /api/news:
+    get:
+      tags: [news]
+      summary: Obtener últimas noticias culturales
+      description: Devuelve las últimas noticias filtradas por idioma (español, inglés o quechua)
+      parameters:
+        - in: query
+          name: lang
+          schema:
+            type: string
+            enum: [es, en, qu]
+            default: es
+          description: Idioma de las noticias (es=español, en=inglés, qu=quechua)
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 3
+            minimum: 1
+            maximum: 10
+          description: Número máximo de noticias a devolver
+      responses:
+        '200':
+          description: Noticias obtenidas exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 3
+                  language:
+                    type: string
+                    example: "es"
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          example: "60d21b4667d0d8992e610c85"
+                        title:
+                          type: string
+                          example: "Inti Raymi 2025: La Fiesta del Sol vuelve a Sacsayhuamán"
+                        content:
+                          type: string
+                          example: "La tradicional Fiesta del Sol..."
+                        summary:
+                          type: string
+                          example: "El Inti Raymi 2025 celebrará..."
+                        imageUrl:
+                          type: string
+                          example: "https://images.unsplash.com/photo-1587595431973-160d0d94add1?w=800"
+                        language:
+                          type: string
+                          enum: [es, en, qu]
+                          example: "es"
+                        category:
+                          type: string
+                          example: "festividad"
+                        isActive:
+                          type: boolean
+                          example: true
+                        publishedAt:
+                          type: string
+                          format: date-time
+                          example: "2025-06-15T00:00:00.000Z"
+                        author:
+                          type: string
+                          example: "Equipo ULenguage"
+                        viewCount:
+                          type: number
+                          example: 0
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+

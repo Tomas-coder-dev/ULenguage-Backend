@@ -21,7 +21,7 @@ const getUserStats = async (req, res) => {
     
     // TODO: Implementar contador real de traducciones
     // Por ahora, usamos un valor placeholder basado en logros
-    const translations = achievements.length * 5; // Simulación
+    const translations = achievements.length; // Simulación
     
     const stats = {
       achievements: achievements.length,

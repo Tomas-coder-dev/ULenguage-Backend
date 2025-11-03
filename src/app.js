@@ -34,6 +34,7 @@ const planRoutes = require('./routes/planRoutes');
 const seedRoutes = require('./routes/seedRoutes');
 const achievementRoutes = require('./routes/achievementRoutes');
 const userRoutes = require('./routes/userRoutes');
+const newsRoutes = require('./routes/newsRoutes');
 const ocrRoutes = require('./services/ocr/ocr.routes');
 const translateRoutes = require('./services/translate/translate.routes');
 const quechuaRoutes = require('./services/translate/quechua.routes');
@@ -58,6 +59,7 @@ app.use('/api/planes', planRoutes);
 app.use('/api/seed', seedRoutes);
 app.use('/api/achievements', achievementRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/news', newsRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/translate', translateRoutes);
 app.use('/api/quechua', quechuaRoutes);
@@ -81,6 +83,8 @@ app.get('/', (req, res) => {
       seed: '/api/seed',
       achievements: '/api/achievements',
       zones: '/api/achievements/zones',
+      users: '/api/users',
+      news: '/api/news',
       ocr: '/api/ocr',
       translate: '/api/translate',
       quechua: '/api/quechua',

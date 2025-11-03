@@ -3,7 +3,8 @@ const { seedContent } = require('./contentSeeder');
 const seedZones = require('./zoneSeeder');
 const seedAchievements = require('./achievementSeeder');
 const seedUsers = require('./userSeeder');
-const seedQuechua = require('./quechuaSeeder'); // <-- nuevo seeder agregado
+const seedQuechua = require('./quechuaSeeder');
+const { seedNews } = require('./newsSeed');
 
 const runAllSeeders = async () => {
   try {
@@ -26,6 +27,9 @@ const runAllSeeders = async () => {
 
     // Sembrar diccionario Quechua
     await seedQuechua();
+
+    // Sembrar noticias culturales
+    await seedNews();
 
     console.log('🎉 Todos los seeders completados exitosamente');
     
