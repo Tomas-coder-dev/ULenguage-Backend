@@ -469,15 +469,14 @@ async function seedQuechua() {
     }
     console.log('🔍 mongoUri (usado por el seeder):', mongoUri);
 
-    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 5000 });
-    console.log('🔌 Conectado a MongoDB para seeder Quechua');
+  // Asume que la conexión global de Mongoose ya está abierta
 
     const fileItems = loadDataFile();
     const rawItems = fileItems && fileItems.length ? fileItems : itemsInline;
 
     if (!rawItems || rawItems.length === 0) {
       console.log('⚠️  No hay elementos para sembrar.');
-      await mongoose.disconnect();
+  // No cerrar la conexión global
       return [];
     }
 
@@ -515,7 +514,7 @@ async function seedQuechua() {
 
     if (ops.length === 0) {
       console.log('⚠️  No se generaron operaciones válidas a partir de los datos.');
-      await mongoose.disconnect();
+  // No cerrar la conexión global
       return [];
     }
 
@@ -523,7 +522,7 @@ async function seedQuechua() {
 
     if (dryRun) {
       console.log('Dry run — no se ejecuta bulkWrite. Ejemplo de operación:', JSON.stringify(ops[0], null, 2));
-      await mongoose.disconnect();
+  // No cerrar la conexión global
       return ops;
     }
 
@@ -539,11 +538,11 @@ async function seedQuechua() {
     }
 
     console.log(`✅ Seeder completado. Upserted (estimado): ${totalUpserted}`);
-    await mongoose.disconnect();
+  // No cerrar la conexión global
     return { upserted: totalUpserted, attempted: ops.length };
   } catch (err) {
     console.error('❌ Error en quechuaSeeder:', err && err.message ? err.message : err);
-    try { await mongoose.disconnect(); } catch (_) {}
+  // No cerrar la conexión global
     throw err;
   }
 }

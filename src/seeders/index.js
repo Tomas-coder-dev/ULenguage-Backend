@@ -5,6 +5,8 @@ const seedAchievements = require('./achievementSeeder');
 const seedUsers = require('./userSeeder');
 const seedQuechua = require('./quechuaSeeder');
 const { seedNews } = require('./newsSeed');
+const seedCommonPhrases = require('./commonPhrasesSeed');
+const enhanceQuechuaEntries = require('./quechuaEnhancer');
 
 const runAllSeeders = async () => {
   try {
@@ -27,9 +29,15 @@ const runAllSeeders = async () => {
 
     // Sembrar diccionario Quechua
     await seedQuechua();
+    
+    // Mejorar diccionario Quechua con variants, frequency, source
+    await enhanceQuechuaEntries();
 
     // Sembrar noticias culturales
     await seedNews();
+    
+    // Sembrar frases comunes multi-idioma
+    await seedCommonPhrases();
 
     console.log('🎉 Todos los seeders completados exitosamente');
     

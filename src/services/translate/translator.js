@@ -62,12 +62,62 @@ async function translateTextHybridDetailed(text, sourceLanguage, targetLanguage)
   try {
     if (source === 'es' && (target === 'quz' || target === 'qu')) {
       const spanishNorm = String(text).trim().toLowerCase();
-      const term = await QuechuaCusqueno.findOne({ spanish: spanishNorm }).lean();
-      if (term && term.quenchua_cusqueno) {
-        return { translation: term.quenchua_cusqueno, source: 'db', candidates: [{ value: term.quenchua_cusqueno, provider: 'db' }], variantUsed: spanishNorm };
+      
+      // Búsqueda exacta por spanish
+      let term = await QuechuaCusqueno.findOne({ spanish: spanishNorm })
+        .sort({ frequency: -1 }) // Prioriza más frecuentes
+        .lean();
+      
+      // Si no encuentra, buscar en variants (ortografías alternativas)
+      if (!term) {
+        term = await QuechuaCusqueno.findOne({ variants: spanishNorm })
+          .sort({ frequency: -1 })
+          .lean();
       }
-      // also tolerate field name quechua_cusqueno (model uses quechua_cusqueno)
-      if (term && term.quew) { /* nothing, safety placeholder */ }
+      
+      // Si no encuentra, intentar búsqueda por texto completo (fuzzy)
+      if (!term) {
+        const fuzzyResults = await QuechuaCusqueno.find(
+          { $text: { $search: spanishNorm } },
+          { score: { $meta: 'textScore' } }
+        )
+        .sort({ score: { $meta: 'textScore' }, frequency: -1 })
+        .limit(3)
+        .lean();
+        
+        if (fuzzyResults && fuzzyResults.length > 0) {
+          term = fuzzyResults[0];
+          // Devolver también candidatos fuzzy
+          const fuzzyCandidates = fuzzyResults.map(t => ({ 
+            value: t.quechua_cusqueno, 
+            provider: 'db-fuzzy',
+            spanish: t.spanish,
+            score: t.score
+          }));
+          
+          // Incrementar frequency del término usado
+          await QuechuaCusqueno.findByIdAndUpdate(term._id, { $inc: { frequency: 1 } });
+          
+          return { 
+            translation: term.quechua_cusqueno, 
+            source: 'db-fuzzy', 
+            candidates: fuzzyCandidates, 
+            variantUsed: spanishNorm 
+          };
+        }
+      }
+      
+      if (term && term.quechua_cusqueno) {
+        // Incrementar frequency del término usado
+        await QuechuaCusqueno.findByIdAndUpdate(term._id, { $inc: { frequency: 1 } });
+        
+        return { 
+          translation: term.quechua_cusqueno, 
+          source: 'db', 
+          candidates: [{ value: term.quechua_cusqueno, provider: 'db', spanish: term.spanish }], 
+          variantUsed: spanishNorm 
+        };
+      }
     }
   } catch (err) {
     console.warn('translateTextHybridDetailed: DB lookup error', err.message || err);

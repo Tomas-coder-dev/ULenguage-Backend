@@ -171,7 +171,7 @@ Resources:
           apt-get install -y mongodb-org
           systemctl enable mongod
           systemctl start mongod
-          # Reinicia servicios críticos tras upgrade para evitar problemas de librerías desactualizadas
+          # Reinicia servicios críticos tras upgrade
           systemctl restart ssh
           systemctl restart mongod
           systemctl restart systemd-journald
@@ -197,11 +197,11 @@ Resources:
           GOOGLE_PLACES_API_KEY=${GooglePlacesApiKey}
           DEPLOY_TOKEN=${DeployToken}
           EOF
-          # Instala dependencias y arranca el backend
+          # Instala dependencias y ejecuta seeders
           npm install
+          npm run seed
           pm2 start src/app.js --name ulenguage-backend
           pm2 save
-          # El backend se actualizará solo por webhook GitHub (endpoint /api/deploy)
 
 Outputs:
   InstancePublicIP:
