@@ -1,0 +1,212 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  ULenguage Backend - Node.js + MongoDB en EC2 Ubuntu, con parámetros de entorno y despliegue automático. Región: sa-east-1 (São Paulo).
+  Elimina la pila para borrar todos los recursos y evitar costos extra.
+
+Parameters:
+  KeyName:
+    Description: 'Nombre para la nueva clave SSH (KeyPair) que se generará para acceso a la instancia.'
+    Type: String
+    Default: ulenguage-backend-key
+  InstanceType:
+    Description: 'Tipo de instancia EC2 (t2.micro entra en el free tier).'
+    Type: String
+    Default: t2.micro
+  GitRepoUrl:
+    Description: 'URL HTTPS de tu repositorio ULenguage Backend (ejemplo: https://github.com/Tomas-coder-dev/ULenguage-Backend.git)'
+    Type: String
+    Default: 'https://github.com/Tomas-coder-dev/ULenguage-Backend.git'
+  Port:
+    Description: 'Puerto de la API Express (ejemplo: 5000)'
+    Type: String
+    Default: '5000'
+  MongoUri:
+    Description: 'URI de conexión a MongoDB local (ejemplo: mongodb://127.0.0.1:27017/ulenguage)'
+    Type: String
+    Default: 'mongodb://127.0.0.1:27017/ulenguage'
+  JwtSecret:
+    Description: 'Secreto para JWT'
+    Type: String
+    Default: 'ulenguage_super_secret_key'
+    NoEcho: true
+  GoogleClientId:
+    Description: 'Client ID de Google OAuth'
+    Type: String
+    Default: '250811921383-lk8t60vfumnfa6od44kbe4lm9bjkoj5n.apps.googleusercontent.com'
+  GoogleApplicationCredentials:
+    Description: 'Ruta del archivo de credenciales de Google (ejemplo: ./google-credentials.json)'
+    Type: String
+    Default: './google-credentials.json'
+  GeminiApiKey:
+    Description: 'API Key de Gemini (puedes dejarlo vacío y editar luego)'
+    Type: String
+    Default: ''
+  GooglePlacesApiKey:
+    Description: 'API Key de Google Places (puedes dejarlo vacío y editar luego)'
+    Type: String
+    Default: ''
+  DeployToken:
+    Description: 'Token secreto para el endpoint de despliegue automático'
+    Type: String
+    Default: 'deploy_token_github_ulenguage2025'
+    NoEcho: true
+
+Resources:
+  # VPC para la red
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: ulenguage-vpc
+
+  # Subnet pública
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: sa-east-1a
+      Tags:
+        - Key: Name
+          Value: ulenguage-public-subnet
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: ulenguage-igw
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Tabla de rutas para acceso a Internet
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: ulenguage-rt
+
+  Route:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+  # Security Group para la instancia
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Permite acceso SSH, HTTP, HTTPS y API Express
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0 # SSH abierto (puedes restringir luego)
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0 # HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0 # HTTPS
+        - IpProtocol: tcp
+          FromPort: !Ref Port
+          ToPort: !Ref Port
+          CidrIp: 0.0.0.0/0 # API Express
+      Tags:
+        - Key: Name
+          Value: ulenguage-sg
+
+  # Genera nueva clave SSH
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Ref KeyName
+
+  # Instancia EC2 Ubuntu
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      ImageId: ami-0476785cbf79d83a3 # Ubuntu 24.04 LTS en sa-east-1
+      Tags:
+        - Key: Name
+          Value: ulenguage-backend
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Actualiza e instala dependencias
+          apt-get update -y
+          DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --quiet
+          apt-get install -y git curl build-essential wget gnupg
+          # Instala MongoDB Community Edition 6.0
+          wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add -
+          echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+          apt-get update -y
+          apt-get install -y mongodb-org
+          systemctl enable mongod
+          systemctl start mongod
+          # Reinicia servicios críticos tras upgrade
+          systemctl restart ssh
+          systemctl restart mongod
+          systemctl restart systemd-journald
+          systemctl restart systemd-networkd
+          systemctl restart systemd-resolved
+          systemctl restart systemd-udevd
+          # Instala Node.js LTS
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
+          npm install -g pm2
+          # Clona el repo
+          cd /home/ubuntu
+          git clone ${GitRepoUrl} ulenguage-backend
+          cd ulenguage-backend
+          # Crea el archivo .env con los parámetros
+          cat <<EOF > .env
+          PORT=${Port}
+          MONGO_URI=${MongoUri}
+          JWT_SECRET=${JwtSecret}
+          GOOGLE_CLIENT_ID=${GoogleClientId}
+          GOOGLE_APPLICATION_CREDENTIALS=${GoogleApplicationCredentials}
+          GEMINI_API_KEY=${GeminiApiKey}
+          GOOGLE_PLACES_API_KEY=${GooglePlacesApiKey}
+          DEPLOY_TOKEN=${DeployToken}
+          EOF
+          # Instala dependencias y ejecuta seeders
+          npm install
+          npm run seed
+          pm2 start src/app.js --name ulenguage-backend
+          pm2 save
+
+Outputs:
+  InstancePublicIP:
+    Description: IP pública de la instancia EC2
+    Value: !GetAtt EC2Instance.PublicIp
+  WebhookEndpoint:
+    Description: URL para el webhook de GitHub (reemplaza por tu IP pública)
+    Value: !Sub "http://${EC2Instance.PublicIp}:${Port}/api/deploy?token=${DeployToken}"
