@@ -26,12 +26,16 @@ exports.getPlaces = async (req, res) => {
     const places = await Promise.all(response.data.results.map(async (place) => {
       let description = {};
       try {
+        console.log(`[🗺️ EXPLORER] Solicitando descripción para: ${place.name}`);
         description = await getPlaceDescriptionIA(place.name);
-      } catch {
+        console.log(`[✅ EXPLORER] Descripción obtenida para: ${place.name}`);
+      } catch (error) {
+        console.error(`[❌ EXPLORER] Error obteniendo descripción para ${place.name}:`, error.message);
+        console.error(`[❌ EXPLORER] Stack:`, error.stack);
         description = {
           es: "Descripción no disponible por el momento.",
           en: "Description not available at the moment.",
-          qu: "Manaraq kashanmi willakuy."
+          qu: "Descripción mana kunan pacha kanchu."
         };
       }
 

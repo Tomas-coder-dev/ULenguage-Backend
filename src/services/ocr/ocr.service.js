@@ -168,11 +168,17 @@ async function translateNameAllLangs(name, sourceLang = 'und', langs = DEFAULT_L
  */
 async function processImageForCulture(imagePath, requestedLang = 'es', langsToReturn = DEFAULT_LANGS) {
   // 1) Vision analysis (envuelto en try para fallback)
+  console.log('[🔍 OCR] Llamando a Vision API...');
   let visionResult = {};
   try {
     visionResult = await withTimeout(analyzeImageWithVision(imagePath, langsToReturn), 30000, {});
+    console.log('[✅ OCR] Vision API respondió correctamente');
+    console.log('[📊 OCR] Objetos detectados:', visionResult.objects?.length || 0);
+    console.log('[📊 OCR] Etiquetas detectadas:', visionResult.labels?.length || 0);
+    console.log('[📊 OCR] Texto detectado:', visionResult.text?.substring(0, 100) || 'ninguno');
   } catch (err) {
-    console.warn('analyzeImageWithVision failed:', err?.message || err);
+    console.error('[❌ OCR] analyzeImageWithVision failed:', err?.message || err);
+    console.error('[❌ OCR] Stack:', err?.stack);
     visionResult = {};
   }
 

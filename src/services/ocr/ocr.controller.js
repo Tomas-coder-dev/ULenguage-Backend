@@ -94,6 +94,8 @@ exports.analyzeAndExplain = async (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('[❌ OCR] Error al analizar imagen:', error.message);
+    console.error('[❌ OCR] Stack trace:', error.stack);
+    console.error('[❌ OCR] Detalles completos:', error);
     
     // Determinar código de error específico
     let errorCode = 'OCR_ERROR';
