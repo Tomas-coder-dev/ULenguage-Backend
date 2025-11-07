@@ -135,6 +135,8 @@ tags:
     description: Contenido cultural quechua
   - name: seed
     description: Población de datos iniciales
+  - name: ocr
+    description: OCR y análisis de imágenes con IA
 
 paths:
   /api/auth/register:
@@ -362,4 +364,237 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /api/ocr/status:
+    get:
+      tags: [ocr]
+      summary: Estado del servicio OCR
+      description: Verifica la disponibilidad del servicio OCR y Google Vision API
+      responses:
+        '200':
+          description: Servicio OCR disponible y funcional
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  service:
+                    type: string
+                    example: "OCR Vision AI"
+                  provider:
+                    type: string
+                    example: "Google Cloud Vision"
+                  ready:
+                    type: boolean
+                    example: true
+                  uploadsDir:
+                    type: boolean
+                    example: true
+                  timestamp:
+                    type: string
+                    format: date-time
+        '503':
+          description: Servicio OCR no disponible
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: false
+                  service:
+                    type: string
+                    example: "OCR Vision AI"
+                  ready:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "Servicio no disponible"
+                  code:
+                    type: string
+                    example: "SERVICE_UNAVAILABLE"
+
+  /api/ocr/analyze:
+    post:
+      tags: [ocr]
+      summary: Analizar imagen con OCR y contexto cultural
+      description: Procesa una imagen con Google Vision, detecta texto y objetos, y genera explicaciones culturales usando IA
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Imagen a analizar (JPG, PNG o WEBP, máx 5MB)
+                targetLang:
+                  type: string
+                  enum: [es, en, qu]
+                  default: es
+                  description: Idioma objetivo para las explicaciones
+                langs:
+                  type: string
+                  example: "es,en,qu"
+                  description: Lista de idiomas separados por comas para generar explicaciones
+      responses:
+        '200':
+          description: Imagen analizada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  texts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        text:
+                          type: string
+                        explanations:
+                          type: object
+                          additionalProperties:
+                            type: string
+                        explanationsPreview:
+                          type: object
+                          additionalProperties:
+                            type: string
+                  detectedLang:
+                    type: string
+                    example: "es"
+                  labels:
+                    type: array
+                    items:
+                      type: string
+                  objects:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        score:
+                          type: number
+                          format: float
+                        boundingBox:
+                          type: array
+                          items:
+                            type: object
+                        translatedNames:
+                          type: object
+                          additionalProperties:
+                            type: string
+                        explanations:
+                          type: object
+                          additionalProperties:
+                            type: string
+                        explanationsPreview:
+                          type: object
+                          additionalProperties:
+                            type: string
+                  explanationProvidedLangs:
+                    type: array
+                    items:
+                      type: string
+                  requestedLang:
+                    type: string
+        '400':
+          description: Error en la solicitud (archivo faltante o inválido)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  code:
+                    type: string
+                    enum: [NO_FILE, INVALID_FILE_TYPE, TOO_MANY_FILES]
+        '413':
+          description: Archivo demasiado grande
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "La imagen es demasiado grande. Tamaño máximo: 5 MB."
+                  code:
+                    type: string
+                    example: "FILE_TOO_LARGE"
+                  maxSize:
+                    type: string
+                    example: "5 MB"
+        '500':
+          description: Error al procesar la imagen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  code:
+                    type: string
+                    enum: [OCR_ERROR, VISION_API_ERROR, TIMEOUT, AUTH_ERROR]
+        '504':
+          description: Timeout al procesar imagen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  code:
+                    type: string
+                    example: "TIMEOUT"
+
+  /api/ocr/analyze-and-translate:
+    post:
+      tags: [ocr]
+      summary: Analizar y traducir imagen
+      description: Procesa una imagen con OCR, detecta objetos y genera explicaciones culturales traducidas
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Imagen a analizar (JPG, PNG o WEBP, máx 5MB)
+                targetLang:
+                  type: string
+                  enum: [es, en, qu]
+                  default: es
+                  description: Idioma objetivo
+                langs:
+                  type: string
+                  example: "es,en,qu"
+      responses:
+        '200':
+          description: Imagen analizada y traducida exitosamente
+        '400':
+          description: Error en la solicitud
+        '413':
+          description: Archivo demasiado grande
+        '500':
+          description: Error al procesar
+
 

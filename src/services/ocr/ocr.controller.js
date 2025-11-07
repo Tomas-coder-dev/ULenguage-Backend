@@ -15,6 +15,51 @@ function parseLangs(input) {
 }
 
 /**
+ * GET /api/ocr/status
+ * Health check del servicio OCR
+ */
+exports.getOcrStatus = async (req, res) => {
+  try {
+    // Verificar que Google Vision esté disponible
+    const vision = require('@google-cloud/vision');
+    const hasCredentials = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    
+    // Verificar directorio de uploads
+    const uploadsDir = 'uploads/';
+    const uploadsExists = fs.existsSync(uploadsDir);
+    if (!uploadsExists) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const status = {
+      ok: true,
+      service: 'OCR Vision AI',
+      provider: 'Google Cloud Vision',
+      ready: hasCredentials,
+      uploadsDir: uploadsExists || fs.existsSync(uploadsDir),
+      timestamp: new Date().toISOString()
+    };
+
+    if (!hasCredentials) {
+      status.warning = 'GOOGLE_APPLICATION_CREDENTIALS no configurado';
+      status.ready = false;
+    }
+
+    return res.status(hasCredentials ? 200 : 503).json(status);
+  } catch (error) {
+    console.error('[❌ OCR] Error en health check:', error.message);
+    return res.status(503).json({ 
+      ok: false,
+      service: 'OCR Vision AI',
+      ready: false,
+      error: 'Servicio no disponible',
+      code: 'SERVICE_UNAVAILABLE',
+      timestamp: new Date().toISOString()
+    });
+  }
+};
+
+/**
  * POST /api/ocr/analyze
  * - multipart upload: file (image)
  * - optional body/query: targetLang (e.g. 'es'), langs (e.g. 'es,en,qu')
@@ -28,7 +73,10 @@ exports.analyzeAndExplain = async (req, res) => {
   
   if (!req.file || !req.file.path) {
     console.log('[❌ OCR] No se recibió archivo de imagen');
-    return res.status(400).json({ message: 'No se subió ninguna imagen.' });
+    return res.status(400).json({ 
+      message: 'No se subió ninguna imagen.',
+      code: 'NO_FILE'
+    });
   }
 
   const imagePath = req.file.path;
@@ -46,7 +94,29 @@ exports.analyzeAndExplain = async (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('[❌ OCR] Error al analizar imagen:', error.message);
-    return res.status(500).json({ message: 'Error al analizar imagen. Intenta nuevamente.' });
+    
+    // Determinar código de error específico
+    let errorCode = 'OCR_ERROR';
+    let statusCode = 500;
+    let errorMessage = 'Error al analizar imagen. Intenta nuevamente.';
+    
+    if (error.message.includes('Vision') || error.message.includes('vision')) {
+      errorCode = 'VISION_API_ERROR';
+      errorMessage = 'Error al procesar imagen con Vision API.';
+    } else if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+      errorCode = 'TIMEOUT';
+      errorMessage = 'Tiempo de espera agotado al procesar imagen.';
+      statusCode = 504;
+    } else if (error.message.includes('credentials') || error.message.includes('authentication')) {
+      errorCode = 'AUTH_ERROR';
+      errorMessage = 'Error de autenticación con servicios externos.';
+      statusCode = 503;
+    }
+    
+    return res.status(statusCode).json({ 
+      message: errorMessage,
+      code: errorCode
+    });
   } finally {
     // remove uploaded file (non-blocking). If you want to keep the file for debugging,
     // pass a flag like ?keepFile=1 from the client and check it here.
@@ -64,7 +134,10 @@ exports.analyzeExplainAndTranslate = async (req, res) => {
   
   if (!req.file || !req.file.path) {
     console.log('[❌ OCR] No se recibió archivo de imagen');
-    return res.status(400).json({ message: 'No se subió ninguna imagen.' });
+    return res.status(400).json({ 
+      message: 'No se subió ninguna imagen.',
+      code: 'NO_FILE'
+    });
   }
 
   const imagePath = req.file.path;
@@ -80,7 +153,28 @@ exports.analyzeExplainAndTranslate = async (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('[❌ OCR] Error al analizar y traducir:', error.message);
-    return res.status(500).json({ message: 'Error al analizar y traducir imagen. Intenta nuevamente.' });
+    
+    // Determinar código de error específico
+    let errorCode = 'OCR_TRANSLATE_ERROR';
+    let statusCode = 500;
+    let errorMessage = 'Error al analizar y traducir imagen. Intenta nuevamente.';
+    
+    if (error.message.includes('Vision') || error.message.includes('vision')) {
+      errorCode = 'VISION_API_ERROR';
+      errorMessage = 'Error al procesar imagen con Vision API.';
+    } else if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+      errorCode = 'TIMEOUT';
+      errorMessage = 'Tiempo de espera agotado al procesar imagen.';
+      statusCode = 504;
+    } else if (error.message.includes('translation') || error.message.includes('translate')) {
+      errorCode = 'TRANSLATION_ERROR';
+      errorMessage = 'Error en el servicio de traducción.';
+    }
+    
+    return res.status(statusCode).json({ 
+      message: errorMessage,
+      code: errorCode
+    });
   } finally {
     fs.unlink(imagePath, () => {});
   }

@@ -21,7 +21,7 @@ const logRequest = (req, res, next) => {
   }
   
   // Log del body si no es GET (ocultar contraseñas)
-  if (method !== 'GET' && Object.keys(req.body).length > 0) {
+  if (method !== 'GET' && req.body && Object.keys(req.body).length > 0) {
     const sanitizedBody = { ...req.body };
     if (sanitizedBody.password) sanitizedBody.password = '***';
     if (sanitizedBody.googleToken) sanitizedBody.googleToken = '***';
