@@ -30,22 +30,11 @@ const register = async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (error) {
-<<<<<<< HEAD
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[Register][ERROR]', error);
-    } else {
-      console.error('[PROD][Register][ERROR]', error.message);
-    }
-    res.status(400).json({ message: error.message });
-=======
     console.error('[Register][ERROR]', error);
-    
     if (error?.name === 'ValidationError') {
       return res.status(400).json({ message: error.message });
     }
-
     res.status(500).json({ message: 'Error al registrar usuario. Intenta nuevamente.' });
->>>>>>> main
   }
 };
 
@@ -72,17 +61,8 @@ const login = async (req, res) => {
       res.status(401).json({ message: 'Credenciales inválidas' });
     }
   } catch (error) {
-<<<<<<< HEAD
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[Login][ERROR]', error);
-    } else {
-      console.error('[PROD][Login][ERROR]', error.message);
-    }
-    res.status(500).json({ message: error.message });
-=======
     console.error('[Login][ERROR]', error);
     res.status(500).json({ message: 'Error al iniciar sesión. Intenta nuevamente.' });
->>>>>>> main
   }
 };
 

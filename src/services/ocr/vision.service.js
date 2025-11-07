@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-=======
+
 /**
  * server/services/vision.service.js
  *
@@ -13,13 +12,10 @@
  * para que ImageAnnotatorClient funcione correctamente.
  */
 
->>>>>>> main
 const vision = require('@google-cloud/vision');
 const client = new vision.ImageAnnotatorClient();
 
 /**
-<<<<<<< HEAD
-=======
  * Intenta extraer el idioma detectado del fullTextAnnotation de forma segura.
  * Recorre páginas y detectedLanguages y devuelve el primer code encontrado.
  */
@@ -40,37 +36,13 @@ function extractDetectedLang(fullTextAnnotation) {
 }
 
 /**
->>>>>>> main
  * Analiza una imagen con Google Vision API.
  * @param {string} imagePath - Ruta del archivo de imagen.
  * @param {string[]} languageHints - Sugerencias de idioma para OCR (ej: ['es', 'qu', 'en'])
  * @returns {Promise<{text: string, lang: string, labels: string[], objects: object[]}>}
  */
 async function analyzeImageWithVision(imagePath, languageHints = ['es', 'qu', 'en']) {
-<<<<<<< HEAD
-  // OCR con sugerencia de idioma
-  const [textDetectionResult] = await client.textDetection({
-    image: { source: { filename: imagePath } },
-    imageContext: { languageHints }
-  });
-  const fullTextAnnotation = textDetectionResult.fullTextAnnotation;
-  const text = fullTextAnnotation ? fullTextAnnotation.text.trim() : '';
-  const lang = fullTextAnnotation ? (fullTextAnnotation.pages[0]?.property?.detectedLanguages[0]?.languageCode || 'und') : 'und';
 
-  // Detección de objetos/etiquetas
-  const [labelDetectionResult] = await client.labelDetection(imagePath);
-  const labels = labelDetectionResult.labelAnnotations.map(label => label.description);
-
-  // Detección avanzada de objetos (bounding box y score)
-  const [objectDetectionResult] = await client.objectLocalization(imagePath);
-  const objects = objectDetectionResult.localizedObjectAnnotations.map(obj => ({
-    name: obj.name,
-    score: obj.score,
-    boundingBox: obj.boundingPoly.normalizedVertices
-  }));
-
-  return { text, lang, labels, objects };
-=======
   try {
     // Usar documentTextDetection para OCR más completo (incluye fullTextAnnotation)
     const [textDetectionResult] = await client.documentTextDetection({
@@ -132,7 +104,6 @@ async function analyzeImageWithVision(imagePath, languageHints = ['es', 'qu', 'e
     console.error('analyzeImageWithVision error:', err?.message || err);
     return { text: '', lang: 'und', labels: [], objects: [] };
   }
->>>>>>> main
 }
 
 module.exports = { analyzeImageWithVision };

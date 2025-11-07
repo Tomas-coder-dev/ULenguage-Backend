@@ -135,11 +135,8 @@ tags:
     description: Contenido cultural quechua
   - name: seed
     description: Población de datos iniciales
-<<<<<<< HEAD
-=======
   - name: ocr
     description: OCR y análisis de imágenes con IA
->>>>>>> main
 
 paths:
   /api/auth/register:
@@ -282,8 +279,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-<<<<<<< HEAD
-=======
 
   /api/news:
     get:
@@ -602,5 +597,3 @@ paths:
         '500':
           description: Error al procesar
 
-
->>>>>>> main
