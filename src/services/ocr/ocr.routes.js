@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const path = require('path');
 const { analyzeAndExplain, analyzeExplainAndTranslate, getOcrStatus } = require('./ocr.controller');
 
 const router = express.Router();
@@ -13,8 +14,13 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     // Validar tipos MIME aceptados
-    const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (allowedMimes.includes(file.mimetype)) {
+    const allowedMimes = ['image/jpeg', 'image/pjpeg', 'image/jpg', 'image/png', 'image/webp'];
+    // Validar extensiones aceptadas (por si el mimetype no es fiable)
+    const allowedExt = ['.jpg', '.jpeg', '.png', '.webp'];
+
+    const ext = path.extname(file.originalname || '').toLowerCase();
+
+    if (allowedMimes.includes((file.mimetype || '').toLowerCase()) || allowedExt.includes(ext)) {
       cb(null, true);
     } else {
       cb(new Error('INVALID_FILE_TYPE'), false);
@@ -55,11 +61,11 @@ router.use((error, req, res, next) => {
     });
   }
   
-  if (error.message === 'INVALID_FILE_TYPE') {
+  if (error && error.message === 'INVALID_FILE_TYPE') {
     return res.status(400).json({ 
-      message: 'Tipo de archivo no válido. Usa: JPG, PNG o WEBP.',
+      message: 'Tipo de archivo no válido. Usa: JPG, JPEG, PNG o WEBP.',
       code: 'INVALID_FILE_TYPE',
-      allowedTypes: ['image/jpeg', 'image/png', 'image/webp']
+      allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', '.jpeg']
     });
   }
   
