@@ -148,7 +148,8 @@ async function translateNameAllLangs(name, sourceLang = 'und', langs = DEFAULT_L
       );
       results[lang] = (tr || '').trim();
     } catch (err) {
-      console.warn(`translateNameAllLangs failed ${sourceLang}->${lang}:`, err?.message || err);
+      const { warn } = require('../../utils/logger');
+      warn('translateNameAllLangs failed %s->%s: %s', sourceLang, lang, err?.message || err);
       results[lang] = '';
     }
   }));
@@ -168,17 +169,18 @@ async function translateNameAllLangs(name, sourceLang = 'und', langs = DEFAULT_L
  */
 async function processImageForCulture(imagePath, requestedLang = 'es', langsToReturn = DEFAULT_LANGS) {
   // 1) Vision analysis (envuelto en try para fallback)
-  console.log('[🔍 OCR] Llamando a Vision API...');
+  const { info, error } = require('../../utils/logger');
+  info('[🔍 OCR] Llamando a Vision API...');
   let visionResult = {};
   try {
     visionResult = await withTimeout(analyzeImageWithVision(imagePath, langsToReturn), 30000, {});
-    console.log('[✅ OCR] Vision API respondió correctamente');
-    console.log('[📊 OCR] Objetos detectados:', visionResult.objects?.length || 0);
-    console.log('[📊 OCR] Etiquetas detectadas:', visionResult.labels?.length || 0);
-    console.log('[📊 OCR] Texto detectado:', visionResult.text?.substring(0, 100) || 'ninguno');
+    info('[✅ OCR] Vision API respondió correctamente');
+    info('[📊 OCR] Objetos detectados: %d', visionResult.objects?.length || 0);
+    info('[📊 OCR] Etiquetas detectadas: %d', visionResult.labels?.length || 0);
+    info('[📊 OCR] Texto detectado: %s', visionResult.text?.substring(0, 100) || 'ninguno');
   } catch (err) {
-    console.error('[❌ OCR] analyzeImageWithVision failed:', err?.message || err);
-    console.error('[❌ OCR] Stack:', err?.stack);
+    error('[❌ OCR] analyzeImageWithVision failed: %s', err?.message || err);
+    error('[❌ OCR] Stack: %s', err?.stack || 'no-stack');
     visionResult = {};
   }
 
@@ -210,8 +212,9 @@ async function processImageForCulture(imagePath, requestedLang = 'es', langsToRe
       let translatedNames = {};
       try {
         translatedNames = await translateNameAllLangs(objName, detectedLang, langsNormalized);
-      } catch (e) {
-        translatedNames = langsNormalized.reduce((acc, l) => { acc[l] = ''; return acc; }, {});
+      } catch (err) {
+        const { error: logError } = require('../../utils/logger');
+        logError('generateExplanationsForItem error for lang=%s: %s', lang, err?.message || err);
       }
 
       // b) precompute explanations per language for this object

@@ -27,6 +27,7 @@ const register = async (req, res) => {
       name: user.name,
       email: user.email,
       plan: user.plan,
+      role: user.role,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -52,6 +53,8 @@ const login = async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        plan: user.plan,
+        role: user.role,
         token: generateToken(user._id),
       });
     } else {
@@ -66,4 +69,21 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { register, login };
+/**
+ * @desc  Obtener perfil del usuario autenticado
+ * @route GET /api/auth/profile
+ * @access Private
+ */
+const getProfile = async (req, res) => {
+  try {
+    // protect middleware ahora adjunta req.user sin password
+    if (!req.user) return res.status(401).json({ message: 'No autorizado' });
+    const { _id, name, email, avatar, plan, role } = req.user;
+    return res.json({ _id, name, email, avatar, plan, role });
+  } catch (error) {
+    console.error('[Profile][ERROR]', error);
+    res.status(500).json({ message: 'Error al obtener perfil' });
+  }
+};
+
+module.exports = { register, login, getProfile };

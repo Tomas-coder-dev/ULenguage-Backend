@@ -67,7 +67,8 @@ async function analyzeImageWithVision(imagePath, languageHints = ['es', 'qu', 'e
         labels = labelDetectionResult.labelAnnotations.map(label => label.description).filter(Boolean);
       }
     } catch (labelErr) {
-      console.warn('Vision labelDetection failed:', labelErr?.message || labelErr);
+      const { warn } = require('../../utils/logger');
+      warn('Vision labelDetection failed: %s', labelErr?.message || labelErr);
       labels = [];
     }
 
@@ -94,14 +95,16 @@ async function analyzeImageWithVision(imagePath, languageHints = ['es', 'qu', 'e
         };
       });
     } catch (objErr) {
-      console.warn('Vision objectLocalization failed or no objects found:', objErr?.message || objErr);
+      const { warn } = require('../../utils/logger');
+      warn('Vision objectLocalization failed or no objects found: %s', objErr?.message || objErr);
       objects = [];
     }
 
     return { text, lang, labels, objects };
   } catch (err) {
     // En caso de error global, logueamos y devolvemos estructura vacía para que el servicio superior maneje el fallback.
-    console.error('analyzeImageWithVision error:', err?.message || err);
+    const { error } = require('../../utils/logger');
+    error('analyzeImageWithVision error: %s', err?.message || err);
     return { text: '', lang: 'und', labels: [], objects: [] };
   }
 }

@@ -119,7 +119,8 @@ async function translateTextHybridDetailed(text, sourceLanguage, targetLanguage)
       }
     }
   } catch (err) {
-    console.warn('translateTextHybridDetailed: DB lookup error', err.message || err);
+    const { warn } = require('../../utils/logger');
+    warn('translateTextHybridDetailed: DB lookup error: %s', err.message || err);
   }
 
   // 2) Try Glosbe with variants
@@ -148,7 +149,8 @@ async function translateTextHybridDetailed(text, sourceLanguage, targetLanguage)
       return { translation: googleTranslation, source: 'google', candidates: [{ value: googleTranslation, provider: 'google' }], variantUsed: null };
     }
   } catch (err) {
-    console.error('translateTextHybridDetailed - Google Translate error:', err.message || err);
+    const { error } = require('../../utils/logger');
+    error('translateTextHybridDetailed - Google Translate error: %s', err.message || err);
   }
 
   // 4) No result
@@ -174,7 +176,8 @@ async function translateTextGoogle(text, targetLanguage) {
     }
     return "No se pudo traducir el texto.";
   } catch (error) {
-    console.error('ERROR en Google Translate API:', error);
+    const { error: logError } = require('../../utils/logger');
+    logError('ERROR en Google Translate API: %o', error);
     return "Error en la traducción automática.";
   }
 }

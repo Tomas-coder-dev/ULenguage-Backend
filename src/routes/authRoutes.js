@@ -13,6 +13,11 @@ const router = express.Router();
 router.post('/register', register);
 router.post('/login', login);
 
+// Perfil del usuario autenticado
+const { protect } = require('../middlewares/authMiddleware');
+const { getProfile } = require('../controllers/authController');
+router.get('/profile', protect, getProfile);
+
 // Rutas de Google OAuth
 router.post('/google', googleAuth);
 router.get('/google/url', getGoogleAuthUrl);

@@ -33,18 +33,19 @@ const client = new OAuth2Client(
  * @access Public
  */
 const googleAuth = async (req, res) => {
-  console.log('[🔐 AUTH] Iniciando autenticación con Google OAuth2');
+  const { info, warn, error } = require('../utils/logger');
+  info('[🔐 AUTH] Iniciando autenticación con Google OAuth2');
   try {
     const { tokenId, idToken, token: googleToken } = req.body;
     // Aceptar cualquiera de los nombres comunes para el token
     const authToken = tokenId || idToken || googleToken;
     if (!authToken) {
-      console.log('[❌ AUTH] Token de Google no recibido en request');
+      warn('[❌ AUTH] Token de Google no recibido en request');
       return res.status(400).json({ 
         message: 'Token de Google es requerido (tokenId, idToken o token)' 
       });
     }
-    console.log('[🔍 AUTH] Verificando token con Google...');
+    info('[🔍 AUTH] Verificando token con Google...');
     // Verificar el token con Google
     const ticket = await client.verifyIdToken({
       idToken: authToken,
@@ -52,7 +53,7 @@ const googleAuth = async (req, res) => {
     });
     const payload = ticket.getPayload();
     const { sub: googleId, email, name, picture } = payload;
-    console.log(`[✅ AUTH] Token verificado para: ${email} (Google ID: ${googleId})`);
+  info(`[✅ AUTH] Token verificado para: ${email} (Google ID: ${googleId})`);
     // Verificar que el email esté verificado
     if (!payload.email_verified) {
       console.log(`[❌ AUTH] Email de Google no verificado: ${email}`);
@@ -68,9 +69,9 @@ const googleAuth = async (req, res) => {
         user.googleId = googleId;
         user.avatar = picture || user.avatar;
         await user.save();
-        console.log(`[🔗 AUTH] Usuario existente vinculado a Google: ${email}`);
+        info(`[🔗 AUTH] Usuario existente vinculado a Google: ${email}`);
       } else {
-        console.log(`[👤 AUTH] Usuario existente autenticado: ${email}`);
+        info(`[👤 AUTH] Usuario existente autenticado: ${email}`);
       }
     } else {
       // Crear nuevo usuario con Google
@@ -82,11 +83,11 @@ const googleAuth = async (req, res) => {
         password: Math.random().toString(36).slice(-8), // Password temporal (no se usará)
         plan: 'free'
       });
-      console.log(`[✨ AUTH] Nuevo usuario creado con Google: ${email} (ID: ${user._id})`);
+      info(`[✨ AUTH] Nuevo usuario creado con Google: ${email} (ID: ${user._id})`);
     }
     // Generar JWT
     const token = generateToken(user._id);
-    console.log(`[🎫 AUTH] Token JWT generado para usuario: ${email}`);
+  info(`[🎫 AUTH] Token JWT generado para usuario: ${email}`);
     res.status(200).json({
       _id: user._id,
       name: user.name,
@@ -97,7 +98,8 @@ const googleAuth = async (req, res) => {
       isNewUser: !user.googleId // Indica si es primera vez con Google
     });
   } catch (error) {
-    console.error('[❌ AUTH] Error en autenticación Google:', error.message);
+    const { error: logError } = require('../utils/logger');
+    logError('[❌ AUTH] Error en autenticación Google: %s', error.message);
     if (error.message.includes('Token used too late')) {
       return res.status(401).json({ 
         message: 'Token de Google expirado, por favor inicia sesión nuevamente' 

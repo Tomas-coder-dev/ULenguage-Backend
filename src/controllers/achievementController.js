@@ -1,5 +1,6 @@
 const Achievement = require('../models/Achievement');
 const Zone = require('../models/Zone');
+const SiteVisited = require('../models/SiteVisited');
 
 /**
  * @desc   Desbloquear un logro al visitar una zona
@@ -60,6 +61,26 @@ const unlockAchievement = async (req, res) => {
       sync_at: method === 'gps' ? new Date() : null,
       content_unlocked: zone.reward_content
     });
+
+    // Registrar sitio visitado automáticamente
+    try {
+      const hasVisited = await SiteVisited.hasVisited(userId, zoneId);
+      if (!hasVisited) {
+        await SiteVisited.create({
+          user_id: userId,
+          zone_id: zoneId,
+          zone_name_es: zone.name_es,
+          zone_name_en: zone.name_en,
+          coordinates: zone.coordinates,
+          visit_method: method,
+          visited_at: new Date()
+        });
+        console.log(`[✅ SITE] Sitio visitado registrado: ${zone.name_es}`);
+      }
+    } catch (siteError) {
+      console.warn('[⚠️ SITE] Error al registrar sitio visitado, continuando:', siteError.message);
+    }
+
     console.log(`[✅ ACHIEVEMENT] Logro desbloqueado exitosamente: ${zone.name_es} | Usuario: ${userId}`);
     res.status(201).json({
       message: '🎉 ¡Logro desbloqueado!',
@@ -158,12 +179,39 @@ const syncOfflineAchievements = async (req, res) => {
  * @access Private
  */
 const getUserAchievements = async (req, res) => {
-  console.log(`[🏆 ACHIEVEMENT] Solicitando logros del usuario: ${req.user._id}`);
+  console.log(`[🏆 ACHIEVEMENT] ===== INICIO GET /api/achievements/me =====`);
+  console.log(`[🏆 ACHIEVEMENT] Usuario autenticado: ${req.user._id}`);
+  console.log(`[🏆 ACHIEVEMENT] Email del usuario: ${req.user.email}`);
+  
   try {
     const userId = req.user._id;
+    
+    // Log de la consulta exacta
+    console.log(`[🔍 ACHIEVEMENT] Buscando en MongoDB: { user_id: ObjectId("${userId}") }`);
+    
     const achievements = await Achievement.find({ user_id: userId })
       .sort({ unlock_at: -1 })
       .lean();
+    
+    console.log(`[📊 ACHIEVEMENT] Resultados encontrados: ${achievements.length}`);
+    
+    if (achievements.length === 0) {
+      console.log(`[⚠️ ACHIEVEMENT] No se encontraron logros para user_id: ${userId}`);
+      console.log(`[💡 ACHIEVEMENT] Verificando si hay documentos con campo incorrecto...`);
+      
+      // Verificar si hay achievements con campo "user" en lugar de "user_id"
+      const wrongField = await Achievement.find({ user: userId }).lean();
+      if (wrongField.length > 0) {
+        console.log(`[❌ ACHIEVEMENT] PROBLEMA: ${wrongField.length} achievements tienen campo 'user' en lugar de 'user_id'`);
+        console.log(`[💡 ACHIEVEMENT] Ejecuta en MongoDB: db.achievements.updateMany({ user: { $exists: true } }, [{ $set: { user_id: '$user' } }, { $unset: 'user' }])`);
+      }
+    } else {
+      console.log(`[✅ ACHIEVEMENT] Primeros 2 logros:`, achievements.slice(0, 2).map(a => ({
+        zone: a.zone_name_es,
+        fecha: a.unlock_at
+      })));
+    }
+    
     const stats = {
       total: achievements.length,
       byMethod: {
@@ -175,7 +223,10 @@ const getUserAchievements = async (req, res) => {
         discounts: achievements.reduce((sum, a) => sum + (a.content_unlocked?.discount || 0), 0)
       }
     };
-    console.log(`[✅ ACHIEVEMENT] ${achievements.length} logros encontrados para el usuario`);
+    
+    console.log(`[✅ ACHIEVEMENT] Estadísticas:`, stats);
+    console.log(`[🏆 ACHIEVEMENT] ===== FIN GET /api/achievements/me =====`);
+    
     res.status(200).json({
       achievements,
       stats

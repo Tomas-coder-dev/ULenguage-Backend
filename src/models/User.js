@@ -21,6 +21,7 @@ const UserSchema = new mongoose.Schema({
     default: '' 
   },
   plan: { type: String, enum: ['free', 'premium'], default: 'free' },
+  role: { type: String, enum: ['user', 'admin'], default: 'user' },
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (next) {

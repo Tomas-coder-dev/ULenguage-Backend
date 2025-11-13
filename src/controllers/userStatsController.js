@@ -1,4 +1,6 @@
 const Achievement = require('../models/Achievement');
+const Translation = require('../models/Translation');
+const SiteVisited = require('../models/SiteVisited');
 const User = require('../models/User');
 
 /**
@@ -15,19 +17,19 @@ const getUserStats = async (req, res) => {
     // Obtener logros del usuario
     const achievements = await Achievement.find({ user_id: userId }).lean();
     
-    // Contar lugares únicos explorados
-    const uniqueZones = new Set(achievements.map(a => a.zone_id));
-    const placesExplored = uniqueZones.size;
+    // Obtener score semanal de traducciones
+    const weeklyTranslations = await Translation.getWeeklyScore(userId);
+    const totalTranslations = await Translation.getTotalScore(userId);
     
-    // TODO: Implementar contador real de traducciones
-    // Por ahora, usamos un valor placeholder basado en logros
-    const translations = achievements.length; // Simulación
+    // Obtener sitios visitados
+    const placesExplored = await SiteVisited.getVisitCount(userId);
     
     const stats = {
       achievements: achievements.length,
-      translations: translations,
+      translations: weeklyTranslations, // Score semanal
+      totalTranslations: totalTranslations, // Total histórico
       placesExplored: placesExplored,
-      culturalLevel: _calculateCulturalLevel(achievements.length, placesExplored),
+      culturalLevel: _calculateCulturalLevel(achievements.length, placesExplored, totalTranslations),
       lastUpdate: new Date().toISOString()
     };
 
@@ -43,10 +45,10 @@ const getUserStats = async (req, res) => {
 };
 
 /**
- * Calcula el nivel cultural basado en logros y lugares explorados
+ * Calcula el nivel cultural basado en logros, lugares explorados y traducciones
  */
-function _calculateCulturalLevel(achievementCount, placesCount) {
-  const totalScore = achievementCount + placesCount;
+function _calculateCulturalLevel(achievementCount, placesCount, translationsCount) {
+  const totalScore = achievementCount + placesCount + Math.floor(translationsCount / 10);
   
   if (totalScore === 0) return 'Explorador Novato';
   if (totalScore < 5) return 'Explorador Cultural';

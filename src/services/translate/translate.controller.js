@@ -1,4 +1,5 @@
 const { translateTextHybridDetailed, translateTextHybrid } = require('./translator');
+const Translation = require('../../models/Translation');
 
 exports.translateText = async (req, res) => {
   const { text, source, target } = req.body;
@@ -16,6 +17,28 @@ exports.translateText = async (req, res) => {
     // Use detailed flow so frontend can show source/candidates
     const result = await translateTextHybridDetailed(text, source, target);
     console.log(`[✅ TRANSLATE] Traducción exitosa | Provider: ${result.source} | Variante: ${result.variantUsed || 'N/A'}`);
+    
+    // Registrar traducción si el usuario está autenticado
+    if (req.user) {
+      try {
+        const langMap = { qu: 'quechua', es: 'spanish', en: 'english' };
+        const { week, year } = Translation.getCurrentWeek();
+        await Translation.create({
+          user_id: req.user._id,
+          from_lang: langMap[source] || 'spanish',
+          to_lang: langMap[target] || 'spanish',
+          original_text: text,
+          translated_text: result.translation,
+          translation_method: 'text',
+          week_number: week,
+          year
+        });
+        console.log('[✅ TRANSLATION] Traducción de texto registrada');
+      } catch (transError) {
+        console.warn('[⚠️ TRANSLATION] Error al registrar traducción:', transError.message);
+      }
+    }
+    
     // result: { translation, source, candidates, variantUsed }
     return res.json({
       originalText: text,

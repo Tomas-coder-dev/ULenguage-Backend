@@ -1,4 +1,5 @@
 const { processImageForCulture, processAndTranslate } = require('./ocr.service');
+const Translation = require('../../models/Translation');
 const fs = require('fs');
 
 /** Parse a langs input which can be "es,en,qu" or ['es','en','qu'] */
@@ -91,6 +92,27 @@ exports.analyzeAndExplain = async (req, res) => {
   try {
     const result = await processImageForCulture(imagePath, targetLang, langsToReturn);
     console.log(`[✅ OCR] Análisis completado exitosamente`);
+    
+    // Registrar traducción si el usuario está autenticado
+    if (req.user && result.detectedText && result.translations && result.translations[targetLang]) {
+      try {
+        const { week, year } = Translation.getCurrentWeek();
+        await Translation.create({
+          user_id: req.user._id,
+          from_lang: 'quechua', // asumimos quechua desde OCR
+          to_lang: targetLang === 'es' ? 'spanish' : targetLang === 'en' ? 'english' : 'spanish',
+          original_text: result.detectedText,
+          translated_text: result.translations[targetLang],
+          translation_method: 'ocr',
+          week_number: week,
+          year
+        });
+        console.log('[✅ TRANSLATION] Traducción OCR registrada');
+      } catch (transError) {
+        console.warn('[⚠️ TRANSLATION] Error al registrar traducción OCR:', transError.message);
+      }
+    }
+    
     return res.json(result);
   } catch (error) {
     console.error('[❌ OCR] Error al analizar imagen:', error.message);

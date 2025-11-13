@@ -50,6 +50,21 @@ Parameters:
     Type: String
     Default: 'deploy_token_github_ulenguage2025'
     NoEcho: true
+  # Nuevos parámetros para acelerar la provisión de variables de entorno
+  
+  UrlFrontAdmin:
+    Description: 'URL del frontend admin (ej: https://u-lenguage-admin.vercel.app)'
+    Type: String
+    Default: 'https://u-lenguage-admin.vercel.app'
+
+  LogLevel:
+    Description: 'Nivel de logs para Winston (error, warn, info, debug)'
+    Type: String
+    Default: 'info'
+  NodeEnv:
+    Description: 'NODE_ENV para la aplicación (development|production)'
+    Type: String
+    Default: 'production'
 
 Resources:
   # VPC para la red
@@ -184,11 +199,14 @@ Resources:
           npm install -g pm2
           # Clona el repo
           cd /home/ubuntu
-          git clone ${GitRepoUrl} ulenguage-backend
-          cd ulenguage-backend
+          git clone ${GitRepoUrl}
+          cd ULenguage-Backend
           # Crea el archivo .env con los parámetros
           cat <<EOF > .env
+          # Archivo de configuración de entorno para la aplicación
           PORT=${Port}
+          NODE_ENV=${NodeEnv}
+          URL_FRONT_ADMIN=${UrlFrontAdmin}
           MONGO_URI=${MongoUri}
           JWT_SECRET=${JwtSecret}
           GOOGLE_CLIENT_ID=${GoogleClientId}
@@ -196,11 +214,13 @@ Resources:
           GEMINI_API_KEY=${GeminiApiKey}
           GOOGLE_PLACES_API_KEY=${GooglePlacesApiKey}
           DEPLOY_TOKEN=${DeployToken}
+          # Logging
+          LOG_LEVEL=${LogLevel}
           EOF
           # Instala dependencias y ejecuta seeders
           npm install
           npm run seed
-          pm2 start src/app.js --name ulenguage-backend
+          pm2 start src/app.js --name ULenguage-Backend
           pm2 save
 
 Outputs:

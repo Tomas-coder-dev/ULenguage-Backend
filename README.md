@@ -194,6 +194,10 @@ npm test           # Ejecutar tests con cobertura
 npm run seed       # Poblar base de datos
 ```
 
+## ⚙️ Producción y logging (PM2)
+
+Hay un documento con instrucciones para ejecutar el servicio con PM2 y diagnosticar fallos relacionados con Google APIs: `docs/pm2.md`.
+En la raíz hay un `ecosystem.config.js` de ejemplo que puedes ajustar y usar con `pm2 start ecosystem.config.js --env production`.
 ## 🌐 Documentación API
 
 Accede a la documentación interactiva en: `http://localhost:5000/api/docs`

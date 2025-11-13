@@ -1,6 +1,7 @@
 const axios = require('axios');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const { translateTextGoogle } = require('../translate/translator'); // ajusta path si es necesario
+const { info, warn, error } = require('../../utils/logger');
 
 const GEMINI_ENDPOINT = (key) =>
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
@@ -53,7 +54,7 @@ function normalizeLang(code) {
  */
 async function getPlaceDescriptionIA(placeOrName) {
   if (!GEMINI_API_KEY) {
-    console.warn('getPlaceDescriptionIA - GEMINI_API_KEY no configurada; devolviendo fallback.');
+    warn('getPlaceDescriptionIA - GEMINI_API_KEY no configurada; devolviendo fallback.');
     const fallbackEs = 'Descripción no disponible por configuración.';
     const [en, qu] = await Promise.all([
       (async () => { try { return await translateTextGoogle(fallbackEs, 'en'); } catch { return 'Description not available.'; } })(),
@@ -81,17 +82,17 @@ async function getPlaceDescriptionIA(placeOrName) {
     const duration = Date.now() - start;
 
     if (respWrap.timeout) {
-      console.warn(`getPlaceDescriptionIA - Gemini request timed out after ${duration}ms for "${titleForPrompt}"`);
+      warn('getPlaceDescriptionIA - Gemini request timed out after %dms for "%s"', duration, titleForPrompt);
     } else if (!respWrap.ok) {
-      console.error('getPlaceDescriptionIA - Gemini error:', respWrap.error?.response?.data || respWrap.error?.message || respWrap.error);
+      error('getPlaceDescriptionIA - Gemini error: %o', respWrap.error?.response?.data || respWrap.error?.message || respWrap.error);
     } else {
       const response = respWrap.value;
       const raw = response?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       description_es = sanitizeAndLimit(raw, MAX_PLACE_CHARS);
-      console.log(`getPlaceDescriptionIA - Gemini responded in ${duration}ms for "${titleForPrompt}"`);
+      info('getPlaceDescriptionIA - Gemini responded in %dms for "%s"', duration, titleForPrompt);
     }
   } catch (err) {
-    console.error('getPlaceDescriptionIA - unexpected error:', err?.message || err);
+    error('getPlaceDescriptionIA - unexpected error: %s', err?.message || err);
     description_es = '';
   }
 
@@ -158,7 +159,7 @@ Sé informativo, conciso y evita juicios políticos o aseveraciones no verificad
   // 1) Intento principal con Gemini en el idioma pedido
   try {
     if (!GEMINI_API_KEY) {
-      console.warn('getCulturalExplanation - GEMINI_API_KEY no configurada; se intentará fallback de traducción si es posible.');
+      warn('getCulturalExplanation - GEMINI_API_KEY no configurada; se intentará fallback de traducción si es posible.');
     } else {
       const start = Date.now();
       const axiosPromise = axios.post(
@@ -171,19 +172,19 @@ Sé informativo, conciso y evita juicios políticos o aseveraciones no verificad
       const duration = Date.now() - start;
 
       if (respWrap.timeout) {
-        console.warn(`getCulturalExplanation - Gemini timed out after ${duration}ms`);
+        warn('getCulturalExplanation - Gemini timed out after %dms', duration);
       } else if (!respWrap.ok) {
-        console.error('getCulturalExplanation - Gemini error:', respWrap.error?.response?.data || respWrap.error?.message || respWrap.error);
+        error('getCulturalExplanation - Gemini error: %o', respWrap.error?.response?.data || respWrap.error?.message || respWrap.error);
       } else {
         const response = respWrap.value;
         const geminiText = response?.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
         const sanitized = sanitizeAndLimit(geminiText, MAX_EXPLANATION_CHARS);
         if (sanitized && sanitized.length > 0) return { explanation: sanitized, lang };
-        console.log(`getCulturalExplanation - Gemini responded in ${duration}ms but text was empty/insufficient`);
+        info('getCulturalExplanation - Gemini responded in %dms but text was empty/insufficient', duration);
       }
     }
   } catch (err) {
-    console.error('getCulturalExplanation - unexpected Gemini error:', err?.message || err);
+    error('getCulturalExplanation - unexpected Gemini error: %s', err?.message || err);
   }
 
   // 2) Fallback: generar en español y traducir si target != 'es'
@@ -216,13 +217,13 @@ Sé informativo, conciso y evita juicios políticos o aseveraciones no verificad
           }
         }
       } else if (respEsWrap && respEsWrap.timeout) {
-        console.warn(`getCulturalExplanation (es fallback) - Gemini timed out after ${durEs}ms`);
+        warn('getCulturalExplanation (es fallback) - Gemini timed out after %dms', durEs);
       } else if (respEsWrap && respEsWrap.error) {
-        console.error('getCulturalExplanation (es fallback) - Gemini error:', respEsWrap.error?.response?.data || respEsWrap.error?.message || respEsWrap.error);
+        error('getCulturalExplanation (es fallback) - Gemini error: %o', respEsWrap.error?.response?.data || respEsWrap.error?.message || respEsWrap.error);
       }
     }
   } catch (e) {
-    console.warn('getCulturalExplanation - fallback es unexpected error:', e?.message || e);
+    warn('getCulturalExplanation - fallback es unexpected error: %s', e?.message || e);
   }
 
   // 3) Último recurso: traducir mensaje por defecto
@@ -231,7 +232,7 @@ Sé informativo, conciso y evita juicios políticos o aseveraciones no verificad
     if (translatedDefaultWrap && translatedDefaultWrap.ok && translatedDefaultWrap.value) {
       return { explanation: sanitizeAndLimit(translatedDefaultWrap.value, MAX_EXPLANATION_CHARS), lang };
     } else if (translatedDefaultWrap && translatedDefaultWrap.timeout) {
-      console.warn('getCulturalExplanation - translateTextGoogle(default) timed out');
+      warn('getCulturalExplanation - translateTextGoogle(default) timed out');
     }
   } catch (e) {
     /* ignore */
