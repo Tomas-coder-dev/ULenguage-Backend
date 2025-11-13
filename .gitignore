@@ -4,5 +4,4 @@ node_modules/
 coverage/
 dist/
 logs/
-
 google-credentials.json

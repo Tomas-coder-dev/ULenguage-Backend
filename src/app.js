@@ -69,8 +69,8 @@ app.use(cors({
     }
 
     // Permitir frontend principal y admin
-    const allowedFront = process.env.URL_FRONTEND || 'http://localhost:3000';
-    const allowedAdmin = process.env.URL_FRONT_ADMIN || 'http://localhost:3001';
+    const allowedFront = process.env.URL_FRONTEND;
+    const allowedAdmin = process.env.URL_FRONT_ADMIN;
     if (origin === allowedFront || origin === allowedAdmin) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
   },

@@ -220,8 +220,9 @@ Resources:
           # Instala dependencias y ejecuta seeders
           npm install
           npm run seed
-          pm2 start src/app.js --name ULenguage-Backend
-          pm2 save
+          fuser -k 5000/tcp || true
+          #pm2 start --name ULenguage-Backend
+          #pm2 save
 
 Outputs:
   InstancePublicIP:
