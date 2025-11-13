@@ -22,6 +22,32 @@ const UserSchema = new mongoose.Schema({
   },
   plan: { type: String, enum: ['free', 'premium'], default: 'free' },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  
+  // Logros generales del usuario (no relacionados con zonas)
+  achievements: [{
+    name: { type: String, required: true },
+    date: { type: Date, default: Date.now }
+  }],
+  
+  // Zonas visitadas por el usuario
+  zonesVisited: [{
+    zone_id: { type: String, required: true },
+    name: { type: String, required: true },
+    coordinates: { type: [Number], required: true }, // [lng, lat]
+    date: { type: Date, default: Date.now }
+  }],
+  
+  // Traducciones guardadas
+  translations: [{
+    text: { type: String, required: true },
+    date: { type: Date, default: Date.now }
+  }],
+  
+  // Frases guardadas
+  savedPhrases: [{
+    text: { type: String, required: true },
+    date: { type: Date, default: Date.now }
+  }]
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (next) {

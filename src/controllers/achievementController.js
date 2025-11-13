@@ -185,26 +185,24 @@ const getUserAchievements = async (req, res) => {
   
   try {
     const userId = req.user._id;
+    const User = require('../models/User');
     
-    // Log de la consulta exacta
+    // Obtener datos del usuario con sus achievements y zonesVisited
+    const user = await User.findById(userId).select('achievements zonesVisited translations savedPhrases').lean();
+    console.log(`[📊 USER] Logros generales: ${user?.achievements?.length || 0}`);
+    console.log(`[📊 USER] Zonas visitadas: ${user?.zonesVisited?.length || 0}`);
+    
+    // Log de la consulta exacta para Achievement collection
     console.log(`[🔍 ACHIEVEMENT] Buscando en MongoDB: { user_id: ObjectId("${userId}") }`);
     
     const achievements = await Achievement.find({ user_id: userId })
       .sort({ unlock_at: -1 })
       .lean();
     
-    console.log(`[📊 ACHIEVEMENT] Resultados encontrados: ${achievements.length}`);
+    console.log(`[📊 ACHIEVEMENT] Logros de zonas desbloqueados: ${achievements.length}`);
     
     if (achievements.length === 0) {
-      console.log(`[⚠️ ACHIEVEMENT] No se encontraron logros para user_id: ${userId}`);
-      console.log(`[💡 ACHIEVEMENT] Verificando si hay documentos con campo incorrecto...`);
-      
-      // Verificar si hay achievements con campo "user" en lugar de "user_id"
-      const wrongField = await Achievement.find({ user: userId }).lean();
-      if (wrongField.length > 0) {
-        console.log(`[❌ ACHIEVEMENT] PROBLEMA: ${wrongField.length} achievements tienen campo 'user' en lugar de 'user_id'`);
-        console.log(`[💡 ACHIEVEMENT] Ejecuta en MongoDB: db.achievements.updateMany({ user: { $exists: true } }, [{ $set: { user_id: '$user' } }, { $unset: 'user' }])`);
-      }
+      console.log(`[⚠️ ACHIEVEMENT] No se encontraron logros de zonas para user_id: ${userId}`);
     } else {
       console.log(`[✅ ACHIEVEMENT] Primeros 2 logros:`, achievements.slice(0, 2).map(a => ({
         zone: a.zone_name_es,
@@ -221,14 +219,25 @@ const getUserAchievements = async (req, res) => {
       totalRewards: {
         badges: achievements.length,
         discounts: achievements.reduce((sum, a) => sum + (a.content_unlocked?.discount || 0), 0)
+      },
+      // Agregar estadísticas del User
+      userStats: {
+        generalAchievements: user?.achievements?.length || 0,
+        zonesVisited: user?.zonesVisited?.length || 0,
+        translations: user?.translations?.length || 0,
+        savedPhrases: user?.savedPhrases?.length || 0
       }
     };
     
-    console.log(`[✅ ACHIEVEMENT] Estadísticas:`, stats);
+    console.log(`[✅ ACHIEVEMENT] Estadísticas completas:`, stats);
     console.log(`[🏆 ACHIEVEMENT] ===== FIN GET /api/achievements/me =====`);
     
     res.status(200).json({
-      achievements,
+      achievements, // Logros de zonas desbloqueadas
+      generalAchievements: user?.achievements || [], // Logros generales del usuario
+      zonesVisited: user?.zonesVisited || [], // Zonas visitadas
+      translations: user?.translations || [],
+      savedPhrases: user?.savedPhrases || [],
       stats
     });
   } catch (error) {
