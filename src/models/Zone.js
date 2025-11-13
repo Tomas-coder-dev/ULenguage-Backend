@@ -23,6 +23,31 @@ const ZoneSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  description_qu: {
+    type: String,
+    default: ''
+  },
+  // Información para Explorer
+  image: {
+    type: String,
+    default: ''
+  },
+  rating: {
+    type: Number,
+    default: 4.5,
+    min: 0,
+    max: 5
+  },
+  reviewsCount: {
+    type: Number,
+    default: 0
+  },
+  // Descripciones detalladas con guías turísticas
+  fullDescription: {
+    es: { type: String, default: '' },
+    en: { type: String, default: '' },
+    qu: { type: String, default: '' }
+  },
   coordinates: {
     type: [Number], // [longitude, latitude] formato GeoJSON
     required: true,

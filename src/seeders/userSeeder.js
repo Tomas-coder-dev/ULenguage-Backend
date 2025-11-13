@@ -8,7 +8,8 @@ const users = [
     password: bcrypt.hashSync('admin123', 10),
     plan: 'premium',
     googleId: null,
-    avatar: '',
+    avatar: 'https://i.pinimg.com/474x/1f/44/39/1f443971b930025b430b6857a5ced4d4.jpg',
+    role: 'admin',
   },
   {
     name: 'Usuario Demo',
