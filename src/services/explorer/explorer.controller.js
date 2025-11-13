@@ -42,6 +42,11 @@ exports.getPlaces = async (req, res) => {
       // intentar cache
       let description = getCachedDescription(placeKey);
 
+      // compute a sensible fallback based on place data
+      const fallbackEs = place.vicinity || place.name || 'Descripción no disponible por el momento.';
+      const fallbackEn = place.vicinity || place.name || 'Description not available at the moment.';
+      const fallbackQu = 'Descripción no disponible por el momento.';
+
       if (!description && idx < maxIaDescriptions) {
         try {
           console.log(`[🗺️ EXPLORER] Solicitando descripción IA para: ${place.name}`);
@@ -49,19 +54,36 @@ exports.getPlaces = async (req, res) => {
           description = await getPlaceDescriptionIA(place);
           console.log(`[✅ EXPLORER] Descripción IA obtenida para: ${place.name}`);
           if (description && typeof description === 'object') {
+            // Normalize: ensure keys exist and are strings (no null)
+            description = {
+              es: (description.es && String(description.es).trim()) || fallbackEs,
+              en: (description.en && String(description.en).trim()) || fallbackEn,
+              qu: (description.qu && String(description.qu).trim()) || fallbackQu
+            };
             setCachedDescription(placeKey, description);
           }
         } catch (error) {
           console.error(`[❌ EXPLORER] Error obteniendo descripción para ${place.name}:`, error?.message || error);
           description = {
-            es: "Descripción no disponible por el momento.",
-            en: "Description not available at the moment.",
-            qu: "Descripción no disponible por el momento."
+            es: fallbackEs,
+            en: fallbackEn,
+            qu: fallbackQu
           };
         }
       } else if (!description) {
-        // no está en cache y excede el límite de llamadas IA
-        description = { es: null, en: null, qu: null };
+        // no está en cache y excede el límite de llamadas IA -> devolver fallback legible
+        description = {
+          es: fallbackEs,
+          en: fallbackEn,
+          qu: fallbackQu
+        };
+      } else {
+        // description exists in cache - normalize possible nulls
+        description = {
+          es: (description.es && String(description.es).trim()) || fallbackEs,
+          en: (description.en && String(description.en).trim()) || fallbackEn,
+          qu: (description.qu && String(description.qu).trim()) || fallbackQu
+        };
       }
 
       return {
