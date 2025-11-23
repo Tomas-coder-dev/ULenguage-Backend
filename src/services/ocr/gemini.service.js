@@ -64,6 +64,11 @@ function simplePlaceFallback(place) {
  * - Acepta un objeto `place` (Google Place) o un nombre string.
  * - Devuelve { es, en, qu } con textos sanitizados y acotados.
  * - Usa Gemini si está disponible; si no, devuelve fallback y traduce.
+ *
+ * Mejoras:
+ * - Si el place.types sugiere "cafe/restaurant/bar" se pide al LLM describir ambiente, oferta y momento ideal.
+ * - Si el place.types sugiere "museum,tourist_attraction" se pide contexto cultural y relevancia histórica.
+ * - Si no se detecta tipo claro, se solicita una descripción equilibrada.
  */
 async function getPlaceDescriptionIA(placeOrName) {
   // If GEMINI not configured, fallback immediately (but still try to provide useful fallback)
@@ -80,7 +85,8 @@ async function getPlaceDescriptionIA(placeOrName) {
   const place = (typeof placeOrName === 'string') ? { name: placeOrName } : (placeOrName || {});
   const name = place.name || place.place_name || '';
   const vicinity = place.vicinity || place.formatted_address || '';
-  const types = Array.isArray(place.types) ? place.types.join(', ') : '';
+  const typesArr = Array.isArray(place.types) ? place.types.map(t => String(t).toLowerCase()) : [];
+  const types = typesArr.join(', ');
   const rating = typeof place.rating === 'number' ? String(place.rating) : (place.rating ? String(place.rating) : '');
   const contextPieces = [];
   if (vicinity) contextPieces.push(`Ubicación: ${vicinity}`);
@@ -88,13 +94,23 @@ async function getPlaceDescriptionIA(placeOrName) {
   if (rating) contextPieces.push(`Rating: ${rating}`);
   const contextText = contextPieces.join(' | ');
 
+  // Ajustar instrucciones según tipo detectado
+  let styleHint = '';
+  if (typesArr.some(t => ['museum', 'art_gallery', 'tourist_attraction', 'historic', 'point_of_interest'].includes(t))) {
+    styleHint = 'Escribe con foco en el contexto cultural, historia breve y relevancia local. Prioriza información cultural y patrimonio.';
+  } else if (typesArr.some(t => ['cafe', 'restaurant', 'bar', 'bakery', 'food'].includes(t))) {
+    styleHint = 'Describe el ambiente, ofertas típicas y la mejor hora para visitar; menciona aspectos prácticos (ej. ideal para desayuno, tarde, etc.).';
+  } else {
+    styleHint = 'Describe qué lo hace interesante o útil para un visitante local o turista, en un tono claro y conciso.';
+  }
+
   const prompt = [
     'Eres un guía turístico local del área andina (Cusco, Perú).',
     `Describe de forma atractiva y respetuosa el lugar: "${name || 'este lugar'}".`,
     contextText ? `Contexto: ${contextText}.` : '',
-    `Escribe 1–2 oraciones, enfocándote en lo más llamativo, culturalmente relevante y único. Máximo ${MAX_PLACE_CHARS} caracteres.`,
-    'Evita frases genéricas como "lugar turístico popular" y no repitas descriptores comunes entre lugares; intenta dar un "gancho" único (ej: historia breve, característica visual, uso local).',
-    'No inventes datos concretos (evita fechas, cifras) si no están en el contexto. Mantén un tono respetuoso.'
+    styleHint,
+    `Escribe 1–2 oraciones, enfocándote en lo más llamativo, culturalmente relevante y útil. Máximo ${MAX_PLACE_CHARS} caracteres.`,
+    'Evita frases genéricas, no inventes datos concretos (fechas, cifras) si no están en el contexto, y mantén un tono respetuoso y veraz.'
   ].filter(Boolean).join(' ');
 
   let description_es = '';
@@ -140,18 +156,20 @@ async function getPlaceDescriptionIA(placeOrName) {
     info('getPlaceDescriptionIA - using fallback for "%s": %s', name || 'N/A', description_es);
   }
 
-  // Translate to en/qu
+  // Translate to en/qu using translateTextGoogle (withTimeout wrappers)
   let description_en = 'Description not available at the moment.';
   let description_qu = 'Manaraq kashanmi willakuy.';
 
   try {
     const trEnWrap = await withTimeout(translateTextGoogle(description_es, 'en'), 8000, null);
     if (trEnWrap && trEnWrap.ok && trEnWrap.value) description_en = sanitizeAndLimit(trEnWrap.value, MAX_PLACE_CHARS);
+    else if (typeof trEnWrap === 'string' && trEnWrap) description_en = sanitizeAndLimit(trEnWrap, MAX_PLACE_CHARS);
   } catch (e) { warn('getPlaceDescriptionIA - translate en failed: %s', e?.message || e); }
 
   try {
     const trQuWrap = await withTimeout(translateTextGoogle(description_es, 'qu'), 8000, null);
     if (trQuWrap && trQuWrap.ok && trQuWrap.value) description_qu = sanitizeAndLimit(trQuWrap.value, MAX_PLACE_CHARS);
+    else if (typeof trQuWrap === 'string' && trQuWrap) description_qu = sanitizeAndLimit(trQuWrap, MAX_PLACE_CHARS);
   } catch (e) { warn('getPlaceDescriptionIA - translate qu failed: %s', e?.message || e); }
 
   return {
@@ -176,6 +194,7 @@ async function getCulturalExplanation(text, labels = [], objects = [], targetLan
     try {
       const trWrap = await withTimeout(translateTextGoogle(baseMsgEs, lang), 6000, null);
       if (trWrap && trWrap.ok && trWrap.value) return { explanation: sanitizeAndLimit(trWrap.value, MAX_EXPLANATION_CHARS), lang };
+      if (typeof trWrap === 'string' && trWrap) return { explanation: sanitizeAndLimit(trWrap, MAX_EXPLANATION_CHARS), lang };
     } catch (e) { /* ignore */ }
     return { explanation: baseMsgEs, lang };
   }
@@ -259,6 +278,8 @@ Sé informativo, conciso y evita juicios políticos o aseveraciones no verificad
           const trWrap = await withTimeout(translateTextGoogle(geminiEs, lang), 8000, null);
           if (trWrap && trWrap.ok && trWrap.value) {
             return { explanation: sanitizeAndLimit(trWrap.value, MAX_EXPLANATION_CHARS), lang };
+          } else if (typeof trWrap === 'string' && trWrap) {
+            return { explanation: sanitizeAndLimit(trWrap, MAX_EXPLANATION_CHARS), lang };
           } else {
             return { explanation: sanitizeAndLimit(geminiEs, MAX_EXPLANATION_CHARS), lang };
           }
@@ -285,6 +306,8 @@ Sé informativo, conciso y evita juicios políticos o aseveraciones no verificad
       return { explanation: sanitizeAndLimit(translatedDefaultWrap.value, MAX_EXPLANATION_CHARS), lang };
     } else if (translatedDefaultWrap && translatedDefaultWrap.timeout) {
       warn('getCulturalExplanation - translateTextGoogle(default) timed out');
+    } else if (typeof translatedDefaultWrap === 'string' && translatedDefaultWrap) {
+      return { explanation: sanitizeAndLimit(translatedDefaultWrap, MAX_EXPLANATION_CHARS), lang };
     }
   } catch (e) {
     /* ignore */

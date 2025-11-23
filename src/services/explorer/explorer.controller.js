@@ -68,6 +68,18 @@ function buildPhotoUrl(photoReference, maxWidth = 800) {
 }
 
 /**
+ * Build google maps URLs
+ */
+function buildGoogleMapsSearchUrl(lat, lng) {
+  if (lat == null || lng == null) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lat)},${encodeURIComponent(lng)}`;
+}
+function buildGoogleMapsDirectionsUrl(lat, lng) {
+  if (lat == null || lng == null) return null;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat)},${encodeURIComponent(lng)}`;
+}
+
+/**
  * Fetch Place Details from Google Places API for a given place_id.
  * Returns an object with the fields you asked: name, address, phone, opening_hours, website, rating, price_level, photos (url), types, location
  */
@@ -119,6 +131,8 @@ async function fetchPlaceDetails(placeId) {
       }));
     }
 
+    const location = result.geometry?.location ? { lat: result.geometry.location.lat, lng: result.geometry.location.lng } : null;
+
     const details = {
       id: placeId,
       name: result.name || null,
@@ -131,7 +145,9 @@ async function fetchPlaceDetails(placeId) {
       price_level: typeof result.price_level === 'number' ? result.price_level : null,
       photos,
       types: Array.isArray(result.types) ? result.types : [],
-      location: result.geometry?.location ? { lat: result.geometry.location.lat, lng: result.geometry.location.lng } : null
+      location,
+      googleMapsUrl: location ? buildGoogleMapsSearchUrl(location.lat, location.lng) : null,
+      directionsUrl: location ? buildGoogleMapsDirectionsUrl(location.lat, location.lng) : null
     };
 
     // Heurística simple para detectar "parking/cochera":
@@ -196,7 +212,8 @@ async function getPlaces(req, res) {
         location: {
           lat: Array.isArray(zone.coordinates) ? zone.coordinates[1] : null,
           lng: Array.isArray(zone.coordinates) ? zone.coordinates[0] : null,
-          googleMapsUrl: Array.isArray(zone.coordinates) ? `https://www.google.com/maps/search/?api=1&query=${zone.coordinates[1]},${zone.coordinates[0]}` : null
+          googleMapsUrl: Array.isArray(zone.coordinates) ? `https://www.google.com/maps/search/?api=1&query=${zone.coordinates[1]},${zone.coordinates[0]}` : null,
+          directionsUrl: Array.isArray(zone.coordinates) ? `https://www.google.com/maps/dir/?api=1&destination=${zone.coordinates[1]},${zone.coordinates[0]}` : null
         },
         category: zone.category,
         rating: zone.rating || null,
@@ -281,6 +298,7 @@ async function getPlaces(req, res) {
         const fallbackQu = 'Descripción no disponible por el momento.';
         if (!description) {
           try {
+            // getPlaceDescriptionIA will return { es,en,qu } and handles GEMINI presence/fallbacks
             const raw = await getPlaceDescriptionIA(place);
             if (raw && typeof raw === 'object') {
               description = {
@@ -328,6 +346,11 @@ async function getPlaces(req, res) {
 
       const details = detailsMap.has(place.place_id) ? detailsMap.get(place.place_id) : null;
 
+      const latLoc = (details && details.location && details.location.lat) || (place.geometry?.location ? place.geometry.location.lat : null);
+      const lngLoc = (details && details.location && details.location.lng) || (place.geometry?.location ? place.geometry.location.lng : null);
+      const googleMapsUrl = (details && details.googleMapsUrl) || buildGoogleMapsSearchUrl(latLoc, lngLoc);
+      const directionsUrl = (details && details.directionsUrl) || buildGoogleMapsDirectionsUrl(latLoc, lngLoc);
+
       // if details available prefer fields from details, otherwise fallback to place summary
       return {
         id: place.place_id,
@@ -341,6 +364,8 @@ async function getPlaces(req, res) {
         price_level: (details && details.price_level) || place.price_level || null,
         photos: (details && details.photos) || (place.photos ? place.photos.map(p => ({ photo_reference: p.photo_reference, url: buildPhotoUrl(p.photo_reference) })) : []),
         location: (details && details.location) || (place.geometry?.location ? { lat: place.geometry.location.lat, lng: place.geometry.location.lng } : null),
+        googleMapsUrl,
+        directionsUrl,
         category: Array.isArray(place.types) && place.types.length ? place.types[0] : '',
         types: (details && details.types) || (Array.isArray(place.types) ? place.types : []),
         has_parking: details ? !!details.has_parking : null,
@@ -384,6 +409,8 @@ async function getPlaceDetailsEndpoint(req, res) {
         website: zone.website || null,
         photos: zone.photos || [],
         location: Array.isArray(zone.coordinates) ? { lat: zone.coordinates[1], lng: zone.coordinates[0] } : null,
+        googleMapsUrl: Array.isArray(zone.coordinates) ? `https://www.google.com/maps/search/?api=1&query=${zone.coordinates[1]},${zone.coordinates[0]}` : null,
+        directionsUrl: Array.isArray(zone.coordinates) ? `https://www.google.com/maps/dir/?api=1&destination=${zone.coordinates[1]},${zone.coordinates[0]}` : null,
         description: {
           es: zone.fullDescription?.es || zone.description_es || null,
           en: zone.fullDescription?.en || zone.description_en || null,
