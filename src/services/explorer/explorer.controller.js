@@ -2,8 +2,11 @@
  * explorer.controller.js
  *
  * Controlador unificado que soporta:
- *  - source=db  => devuelve lugares desde colección Zone (MongoDB)
- *  - source=places (por defecto) => consulta Google Places y opcional Place Details
+ *  - source=db      => devuelve lugares desde colección Zone (MongoDB)
+ *  - source=places  => consulta solo Google Places
+ *  - source=both    => combina BD + Google Places
+ *  - source vacío   => por defecto combina BD + Google Places si hay API key,
+ *                      o solo BD si no hay GOOGLE_PLACES_API_KEY
  *
  * Soporta filtros: types, location, radius, details=true, details_count, page_token, query
  */
@@ -51,7 +54,7 @@ function setCachedPlaceDetails(placeId, value) {
 }
 
 /**
- * Helper: dedupe places by place_id or id preserving first seen
+ * Helper: dedupe places by place_id or id preservando el primero
  */
 function dedupePlaces(placesArray) {
   const map = new Map();
@@ -98,7 +101,6 @@ function buildGoogleMapsDirectionsUrl(lat, lng) {
 async function fetchPlaceDetails(placeId) {
   if (!placeId) return null;
 
-  // Try cache first
   const cached = getCachedPlaceDetails(placeId);
   if (cached) return cached;
 
@@ -202,8 +204,10 @@ async function fetchPlaceDetails(placeId) {
  *
  * source=db:
  *   - usa Zone (MongoDB) + query (texto)
- * source=places (default):
- *   - usa Google Places (requiere GOOGLE_PLACES_API_KEY)
+ * source=places:
+ *   - usa solo Google Places
+ * source=both o vacío:
+ *   - intenta combinar BD + Google Places (si hay GOOGLE_PLACES_API_KEY)
  */
 async function getPlaces(req, res) {
   try {
@@ -212,314 +216,343 @@ async function getPlaces(req, res) {
       ? req.query.query.toString().toLowerCase()
       : null;
 
-    // 1) Flujo DB (Zone)
-    if (source === 'db' || !GOOGLE_PLACES_API_KEY) {
-      let filter = { active: true };
-      if (query) {
-        filter.$or = [
-          { name_es: { $regex: query, $options: 'i' } },
-          { name_en: { $regex: query, $options: 'i' } },
-          { description_es: { $regex: query, $options: 'i' } },
-          { description_en: { $regex: query, $options: 'i' } },
-          { category: { $regex: query, $options: 'i' } },
-        ];
-      }
+    const hasPlacesKey = !!GOOGLE_PLACES_API_KEY;
 
-      const zones = await Zone.find(filter)
-        .select('-__v -created_at -updated_at -qr_code')
-        .sort({ rating: -1, reviewsCount: -1 })
-        .lean();
+    const wantDb =
+      source === 'db' ||
+      source === 'both' ||
+      (!source && true); // por defecto, siempre BD
 
-      const places = zones.map((zone) => ({
-        id: zone._id?.toString(),
-        name: zone.name_es || zone.name_en || zone.name || null,
-        image: zone.image || null,
-        location: {
-          lat: Array.isArray(zone.coordinates) ? zone.coordinates[1] : null,
-          lng: Array.isArray(zone.coordinates) ? zone.coordinates[0] : null,
-          googleMapsUrl: Array.isArray(zone.coordinates)
-            ? `https://www.google.com/maps/search/?api=1&query=${zone.coordinates[1]},${zone.coordinates[0]}`
-            : null,
-          directionsUrl: Array.isArray(zone.coordinates)
-            ? `https://www.google.com/maps/dir/?api=1&destination=${zone.coordinates[1]},${zone.coordinates[0]}`
-            : null,
-        },
-        category: zone.category,
-        rating: zone.rating || null,
-        reviewsCount: zone.reviewsCount || 0,
-        description: {
-          es:
-            zone.fullDescription?.es ||
-            zone.description_es ||
-            'Descripción no disponible',
-          en:
-            zone.fullDescription?.en ||
-            zone.description_en ||
-            'Description not available',
-          qu:
-            zone.fullDescription?.qu ||
-            zone.description_qu ||
-            'Mana willakuy kanchu',
-        },
-        address: zone.address || null,
-        phone: zone.phone || null,
-        opening_hours: zone.opening_hours || null,
-        website: zone.website || null,
-        photos: zone.photos || [],
-      }));
+    const wantPlaces =
+      (source === 'places' ||
+        source === 'both' ||
+        (!source && hasPlacesKey)) &&
+      hasPlacesKey;
 
-      console.log(`[🗺️ EXPLORER] Lugares obtenidos de BD: ${places.length}`);
-      return res.json({ places });
-    }
+    // ---- 1) Flujo BD (Zone), si se desea ----
+    const dbPromise = wantDb
+      ? (async () => {
+          let filter = { active: true };
+          if (query) {
+            filter.$or = [
+              { name_es: { $regex: query, $options: 'i' } },
+              { name_en: { $regex: query, $options: 'i' } },
+              { description_es: { $regex: query, $options: 'i' } },
+              { description_en: { $regex: query, $options: 'i' } },
+              { category: { $regex: query, $options: 'i' } },
+            ];
+          }
 
-    // 2) Flujo Google Places
-    // Ubicación por defecto (Cusco)
-    let lat = -13.53195;
-    let lng = -71.967463;
-    if (req.query.location) {
-      const parts = String(req.query.location).split(',');
-      if (parts.length === 2) {
-        const a = parseFloat(parts[0]);
-        const b = parseFloat(parts[1]);
-        if (!isNaN(a) && !isNaN(b)) {
-          lat = a;
-          lng = b;
-        }
-      }
-    }
+          const zones = await Zone.find(filter)
+            .select('-__v -created_at -updated_at -qr_code')
+            .sort({ rating: -1, reviewsCount: -1 })
+            .lean();
 
-    const radius = parseInt(req.query.radius, 10) || 30000;
-    const typesParam = req.query.types || req.query.type || 'tourist_attraction';
-    const types = String(typesParam)
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (types.length === 0) types.push('tourist_attraction');
+          const places = zones.map((zone) => ({
+            id: zone._id?.toString(),
+            name: zone.name_es || zone.name_en || zone.name || null,
+            image: zone.image || null,
+            location: {
+              lat: Array.isArray(zone.coordinates) ? zone.coordinates[1] : null,
+              lng: Array.isArray(zone.coordinates) ? zone.coordinates[0] : null,
+              googleMapsUrl: Array.isArray(zone.coordinates)
+                ? `https://www.google.com/maps/search/?api=1&query=${zone.coordinates[1]},${zone.coordinates[0]}`
+                : null,
+              directionsUrl: Array.isArray(zone.coordinates)
+                ? `https://www.google.com/maps/dir/?api=1&destination=${zone.coordinates[1]},${zone.coordinates[0]}`
+                : null,
+            },
+            category: zone.category,
+            rating: zone.rating || null,
+            reviewsCount: zone.reviewsCount || 0,
+            description: {
+              es:
+                zone.fullDescription?.es ||
+                zone.description_es ||
+                'Descripción no disponible',
+              en:
+                zone.fullDescription?.en ||
+                zone.description_en ||
+                'Description not available',
+              qu:
+                zone.fullDescription?.qu ||
+                zone.description_qu ||
+                'Mana willakuy kanchu',
+            },
+            address: zone.address || null,
+            phone: zone.phone || null,
+            opening_hours: zone.opening_hours || null,
+            website: zone.website || null,
+            photos: zone.photos || [],
+            source: 'db',
+          }));
 
-    const pageToken = req.query.page_token
-      ? `&pagetoken=${encodeURIComponent(req.query.page_token)}`
-      : '';
-    const wantDetails =
-      String(req.query.details || 'false').toLowerCase() === 'true';
-    const detailsCount = parseInt(req.query.details_count, 10) || 5;
+          console.log(`[🗺️ EXPLORER] Lugares obtenidos de BD: ${places.length}`);
+          return places;
+        })()
+      : Promise.resolve([]);
 
-    // Petición por tipo
-    const requests = types.map((type) => {
-      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=${encodeURIComponent(
-        type
-      )}&key=${GOOGLE_PLACES_API_KEY}${pageToken}`;
-      return axios
-        .get(url, { timeout: 8000 })
-        .then((r) => ({ type, data: r.data }))
-        .catch((err) => ({ type, error: err }));
-    });
-
-    const responses = await Promise.allSettled(requests);
-
-    let combinedResults = [];
-    let nextPageToken = null;
-    for (const respWrap of responses) {
-      if (respWrap.status !== 'fulfilled') {
-        console.warn(
-          '[ExplorerService] Places request failed:',
-          respWrap.reason?.message || respWrap.reason
-        );
-        continue;
-      }
-      const resp = respWrap.value;
-      if (resp && resp.error) {
-        console.warn(
-          '[ExplorerService] Places request error for type=%s: %o',
-          resp.type,
-          resp.error?.response?.status || resp.error?.message || resp.error
-        );
-        continue;
-      }
-      const data = resp.data || {};
-      const results = Array.isArray(data.results) ? data.results : [];
-      combinedResults = combinedResults.concat(results);
-      if (!nextPageToken && data.next_page_token) {
-        nextPageToken = data.next_page_token;
-      }
-    }
-
-    // Deduplicate
-    const uniquePlaces = dedupePlaces(combinedResults);
-
-    // IA para descripciones (extender número si quieres más)
-    const maxIaDescriptions = 30; // antes 6
-    const placesToDescribe = uniquePlaces.slice(0, maxIaDescriptions);
-
-    await Promise.allSettled(
-      placesToDescribe.map(async (place) => {
-        try {
-          const placeKey = (
-            place.place_id ||
-            place.name ||
-            `${place.geometry?.location?.lat},${place.geometry?.location?.lng}`
-          ).toString();
-          let description = getCachedDescription(placeKey);
-
-          const fallbackEs =
-            place.vicinity ||
-            place.name ||
-            'Descripción no disponible por el momento.';
-          const fallbackEn =
-            place.vicinity ||
-            place.name ||
-            'Description not available at the moment.';
-          const fallbackQu = 'Descripción no disponible por el momento.';
-
-          if (!description) {
-            try {
-              const raw = await getPlaceDescriptionIA(place);
-              if (raw && typeof raw === 'object') {
-                description = {
-                  es:
-                    (raw.es && String(raw.es).trim()) ||
-                    fallbackEs,
-                  en:
-                    (raw.en && String(raw.en).trim()) ||
-                    fallbackEn,
-                  qu:
-                    (raw.qu && String(raw.qu).trim()) ||
-                    fallbackQu,
-                };
-              } else {
-                description = {
-                  es: fallbackEs,
-                  en: fallbackEn,
-                  qu: fallbackQu,
-                };
+    // ---- 2) Flujo Google Places, si se desea y hay API key ----
+    const placesPromise = wantPlaces
+      ? (async () => {
+          // Ubicación por defecto (Cusco)
+          let lat = -13.53195;
+          let lng = -71.967463;
+          if (req.query.location) {
+            const parts = String(req.query.location).split(',');
+            if (parts.length === 2) {
+              const a = parseFloat(parts[0]);
+              const b = parseFloat(parts[1]);
+              if (!isNaN(a) && !isNaN(b)) {
+                lat = a;
+                lng = b;
               }
-              setCachedDescription(placeKey, description);
-            } catch (err) {
-              console.warn(
-                '[ExplorerService] getPlaceDescriptionIA failed for %s: %s',
-                place.name,
-                err?.message || err
-              );
-              description = {
-                es: fallbackEs,
-                en: fallbackEn,
-                qu: fallbackQu,
-              };
-              setCachedDescription(placeKey, description);
             }
           }
-        } catch (e) {
-          console.warn(
-            '[ExplorerService] describe place error:',
-            e?.message || e
-          );
-        }
-      })
-    );
 
-    // Place Details para los primeros N
-    let detailsMap = new Map();
-    if (wantDetails) {
-      const toDetails = uniquePlaces.slice(0, detailsCount);
-      const detailsResults = await Promise.allSettled(
-        toDetails.map((p) => fetchPlaceDetails(p.place_id))
-      );
-      detailsResults.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value) {
-          detailsMap.set(toDetails[i].place_id, r.value);
-        } else {
-          detailsMap.set(toDetails[i].place_id, null);
-        }
-      });
-    }
+          const radius = parseInt(req.query.radius, 10) || 30000;
+          const typesParam =
+            req.query.types || req.query.type || 'tourist_attraction';
+          const types = String(typesParam)
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (types.length === 0) types.push('tourist_attraction');
 
-    // Payload final
-    const payloadPlaces = uniquePlaces.map((place) => {
-      const placeKey = (
-        place.place_id ||
-        place.name ||
-        `${place.geometry?.location?.lat},${place.geometry?.location?.lng}`
-      ).toString();
+          const pageToken = req.query.page_token
+            ? `&pagetoken=${encodeURIComponent(req.query.page_token)}`
+            : '';
+          const wantDetails =
+            String(req.query.details || 'false').toLowerCase() === 'true';
+          const detailsCount = parseInt(req.query.details_count, 10) || 5;
 
-      const description =
-        getCachedDescription(placeKey) || {
-          es:
-            place.vicinity ||
-            place.name ||
-            'Descripción no disponible por el momento.',
-          en:
-            place.vicinity ||
-            place.name ||
-            'Description not available at the moment.',
-          qu: 'Descripción no disponible por el momento.',
-        };
+          const requests = types.map((type) => {
+            const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=${encodeURIComponent(
+              type
+            )}&key=${GOOGLE_PLACES_API_KEY}${pageToken}`;
+            return axios
+              .get(url, { timeout: 8000 })
+              .then((r) => ({ type, data: r.data }))
+              .catch((err) => ({ type, error: err }));
+          });
 
-      const details = detailsMap.has(place.place_id)
-        ? detailsMap.get(place.place_id)
-        : null;
+          const responses = await Promise.allSettled(requests);
 
-      const latLoc =
-        (details && details.location && details.location.lat) ||
-        (place.geometry?.location
-          ? place.geometry.location.lat
-          : null);
-      const lngLoc =
-        (details && details.location && details.location.lng) ||
-        (place.geometry?.location
-          ? place.geometry.location.lng
-          : null);
+          let combinedResults = [];
+          let nextPageToken = null;
+          for (const respWrap of responses) {
+            if (respWrap.status !== 'fulfilled') {
+              console.warn(
+                '[ExplorerService] Places request failed:',
+                respWrap.reason?.message || respWrap.reason
+              );
+              continue;
+            }
+            const resp = respWrap.value;
+            if (resp && resp.error) {
+              console.warn(
+                '[ExplorerService] Places request error for type=%s: %o',
+                resp.type,
+                resp.error?.response?.status ||
+                  resp.error?.message ||
+                  resp.error
+              );
+              continue;
+            }
+            const data = resp.data || {};
+            const results = Array.isArray(data.results) ? data.results : [];
+            combinedResults = combinedResults.concat(results);
+            if (!nextPageToken && data.next_page_token) {
+              nextPageToken = data.next_page_token;
+            }
+          }
 
-      const googleMapsUrl =
-        (details && details.googleMapsUrl) ||
-        buildGoogleMapsSearchUrl(latLoc, lngLoc);
-      const directionsUrl =
-        (details && details.directionsUrl) ||
-        buildGoogleMapsDirectionsUrl(latLoc, lngLoc);
+          const uniquePlaces = dedupePlaces(combinedResults);
 
-      return {
-        id: place.place_id,
-        name: (details && details.name) || place.name || null,
-        vicinity: (details && details.vicinity) || place.vicinity || null,
-        address: (details && details.address) || null,
-        phone: (details && details.phone) || null,
-        opening_hours: (details && details.opening_hours) || null,
-        website: (details && details.website) || null,
-        rating: (details && details.rating) || place.rating || null,
-        price_level:
-          (details && details.price_level) || place.price_level || null,
-        photos:
-          (details && details.photos) ||
-          (place.photos
-            ? place.photos.map((p) => ({
-                photo_reference: p.photo_reference,
-                url: buildPhotoUrl(p.photo_reference),
-              }))
-            : []),
-        location:
-          (details && details.location) ||
-          (place.geometry?.location
-            ? {
-                lat: place.geometry.location.lat,
-                lng: place.geometry.location.lng,
+          // IA para descripciones
+          const maxIaDescriptions = 30;
+          const placesToDescribe = uniquePlaces.slice(0, maxIaDescriptions);
+
+          await Promise.allSettled(
+            placesToDescribe.map(async (place) => {
+              try {
+                const placeKey = (
+                  place.place_id ||
+                  place.name ||
+                  `${place.geometry?.location?.lat},${place.geometry?.location?.lng}`
+                ).toString();
+                let description = getCachedDescription(placeKey);
+
+                const fallbackEs =
+                  place.vicinity ||
+                  place.name ||
+                  'Descripción no disponible por el momento.';
+                const fallbackEn =
+                  place.vicinity ||
+                  place.name ||
+                  'Description not available at the moment.';
+                const fallbackQu = 'Descripción no disponible por el momento.';
+
+                if (!description) {
+                  try {
+                    const raw = await getPlaceDescriptionIA(place);
+                    if (raw && typeof raw === 'object') {
+                      description = {
+                        es:
+                          (raw.es && String(raw.es).trim()) ||
+                          fallbackEs,
+                        en:
+                          (raw.en && String(raw.en).trim()) ||
+                          fallbackEn,
+                        qu:
+                          (raw.qu && String(raw.qu).trim()) ||
+                          fallbackQu,
+                      };
+                    } else {
+                      description = {
+                        es: fallbackEs,
+                        en: fallbackEn,
+                        qu: fallbackQu,
+                      };
+                    }
+                    setCachedDescription(placeKey, description);
+                  } catch (err) {
+                    console.warn(
+                      '[ExplorerService] getPlaceDescriptionIA failed for %s: %s',
+                      place.name,
+                      err?.message || err
+                    );
+                    description = {
+                      es: fallbackEs,
+                      en: fallbackEn,
+                      qu: fallbackQu,
+                    };
+                    setCachedDescription(placeKey, description);
+                  }
+                }
+              } catch (e) {
+                console.warn(
+                  '[ExplorerService] describe place error:',
+                  e?.message || e
+                );
               }
-            : null),
-        googleMapsUrl,
-        directionsUrl,
-        category:
-          Array.isArray(place.types) && place.types.length
-            ? place.types[0]
-            : '',
-        types:
-          (details && details.types) ||
-          (Array.isArray(place.types) ? place.types : []),
-        has_parking: details ? !!details.has_parking : null,
-        reviewsCount: place.user_ratings_total,
-        description,
-      };
-    });
+            })
+          );
+
+          let detailsMap = new Map();
+          if (wantDetails) {
+            const toDetails = uniquePlaces.slice(0, detailsCount);
+            const detailsResults = await Promise.allSettled(
+              toDetails.map((p) => fetchPlaceDetails(p.place_id))
+            );
+            detailsResults.forEach((r, i) => {
+              if (r.status === 'fulfilled' && r.value) {
+                detailsMap.set(toDetails[i].place_id, r.value);
+              } else {
+                detailsMap.set(toDetails[i].place_id, null);
+              }
+            });
+          }
+
+          const payloadPlaces = uniquePlaces.map((place) => {
+            const placeKey = (
+              place.place_id ||
+              place.name ||
+              `${place.geometry?.location?.lat},${place.geometry?.location?.lng}`
+            ).toString();
+
+            const description =
+              getCachedDescription(placeKey) || {
+                es:
+                  place.vicinity ||
+                  place.name ||
+                  'Descripción no disponible por el momento.',
+                en:
+                  place.vicinity ||
+                  place.name ||
+                  'Description not available at the moment.',
+                qu: 'Descripción no disponible por el momento.',
+              };
+
+            const details = detailsMap.has(place.place_id)
+              ? detailsMap.get(place.place_id)
+              : null;
+
+            const latLoc =
+              (details && details.location && details.location.lat) ||
+              (place.geometry?.location
+                ? place.geometry.location.lat
+                : null);
+            const lngLoc =
+              (details && details.location && details.location.lng) ||
+              (place.geometry?.location
+                ? place.geometry.location.lng
+                : null);
+
+            const googleMapsUrl =
+              (details && details.googleMapsUrl) ||
+              buildGoogleMapsSearchUrl(latLoc, lngLoc);
+            const directionsUrl =
+              (details && details.directionsUrl) ||
+              buildGoogleMapsDirectionsUrl(latLoc, lngLoc);
+
+            return {
+              id: place.place_id,
+              name: (details && details.name) || place.name || null,
+              vicinity: (details && details.vicinity) || place.vicinity || null,
+              address: (details && details.address) || null,
+              phone: (details && details.phone) || null,
+              opening_hours: (details && details.opening_hours) || null,
+              website: (details && details.website) || null,
+              rating: (details && details.rating) || place.rating || null,
+              price_level:
+                (details && details.price_level) || place.price_level || null,
+              photos:
+                (details && details.photos) ||
+                (place.photos
+                  ? place.photos.map((p) => ({
+                      photo_reference: p.photo_reference,
+                      url: buildPhotoUrl(p.photo_reference),
+                    }))
+                  : []),
+              location:
+                (details && details.location) ||
+                (place.geometry?.location
+                  ? {
+                      lat: place.geometry.location.lat,
+                      lng: place.geometry.location.lng,
+                    }
+                  : null),
+              googleMapsUrl,
+              directionsUrl,
+              category:
+                Array.isArray(place.types) && place.types.length
+                  ? place.types[0]
+                  : '',
+              types:
+                (details && details.types) ||
+                (Array.isArray(place.types) ? place.types : []),
+              has_parking: details ? !!details.has_parking : null,
+              reviewsCount: place.user_ratings_total,
+              description,
+              source: 'places',
+            };
+          });
+
+          return payloadPlaces;
+        })()
+      : Promise.resolve([]);
+
+    const [placesFromDb, placesFromPlaces] = await Promise.all([
+      dbPromise,
+      placesPromise,
+    ]);
+
+    const allPlaces = [...placesFromDb, ...placesFromPlaces];
 
     return res.json({
-      places: payloadPlaces,
-      next_page_token: nextPageToken || null,
+      places: allPlaces,
+      next_page_token: null, // si quieres usar paginación de Places, aquí puedes devolver el token
     });
   } catch (error) {
     console.error(
