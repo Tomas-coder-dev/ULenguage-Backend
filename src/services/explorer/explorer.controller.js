@@ -17,6 +17,7 @@ const { getPlaceDescriptionIA } = require('../ocr/gemini.service');
 const Zone = require('../../models/Zone');
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
+console.log('[ULenguage] GOOGLE_PLACES_API_KEY:', GOOGLE_PLACES_API_KEY ? `${GOOGLE_PLACES_API_KEY.slice(0,3)}...${GOOGLE_PLACES_API_KEY.slice(-3)}` : '(no definida)');
 const DESCRIPTION_CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 horas
 const descriptionCache = new Map();
 const placeDetailsCache = new Map(); // cache para place details
