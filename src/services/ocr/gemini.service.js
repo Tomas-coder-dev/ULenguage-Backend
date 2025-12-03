@@ -1,7 +1,7 @@
 const axios = require('axios');
 const util = require('util');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const { translateTextHybrid, translateTextGoogle } = require('../translate/translator'); // usar híbrido para qu
+const { translateTextHybrid, translateTextGoogle } = require('../translate/translator');
 const { info, warn, error } = require('../../utils/logger');
 
 const GEMINI_ENDPOINT = (key) =>
@@ -260,8 +260,6 @@ async function getPlaceDescriptionIA(placeOrName) {
  * - Genera una explicación cultural breve (2-3 oraciones) en el idioma targetLang.
  * - Usa Gemini si está disponible; hace fallback a generar en español y traducir
  *   o a traducir un mensaje por defecto.
- *
- * (Lógica igual que tu versión; solo retocado ligeramente el log y comentarios.)
  */
 async function getCulturalExplanation(text, labels = [], objects = [], targetLang = 'es') {
   const lang = normalizeLang(targetLang);
