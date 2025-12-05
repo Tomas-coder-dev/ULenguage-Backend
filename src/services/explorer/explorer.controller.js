@@ -296,7 +296,7 @@ async function getPlaces(req, res) {
     // ---- 2) Flujo Google Places, si se desea y hay API key ----
     const placesPromise = wantPlaces
       ? (async () => {
-          // Ubicación por defecto (Cusco)
+          // Ubicación por defecto (Cusco centro)
           let lat = -13.53195;
           let lng = -71.967463;
           if (req.query.location) {
@@ -311,7 +311,7 @@ async function getPlaces(req, res) {
             }
           }
 
-          const radius = parseInt(req.query.radius, 10) || 30000;
+          const radius = parseInt(req.query.radius, 10) || 3000; // 3km por defecto
           const typesParam =
             req.query.types || req.query.type || 'tourist_attraction';
           const types = String(typesParam)
@@ -324,8 +324,8 @@ async function getPlaces(req, res) {
             ? `&pagetoken=${encodeURIComponent(req.query.page_token)}`
             : '';
           const wantDetails =
-            String(req.query.details || 'false').toLowerCase() === 'true';
-          const detailsCount = parseInt(req.query.details_count, 10) || 5;
+            String(req.query.details || 'true').toLowerCase() === 'true';
+          const detailsCount = parseInt(req.query.details_count, 10) || 15;
 
           const requests = types.map((type) => {
             const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=${encodeURIComponent(
@@ -368,6 +368,7 @@ async function getPlaces(req, res) {
             }
           }
 
+          // Nearby Search ya devuelve por distancia al location
           const uniquePlaces = dedupePlaces(combinedResults);
 
           // IA para descripciones
