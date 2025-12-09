@@ -334,7 +334,7 @@ async function getPlaces(req, res) {
 
     console.log('[🗺️ EXPLORER] REQUEST → source=%s, query=%s, types=%s, location=%s, page=%d, limit=%d, sortBy=%s', 
       source || '(none)', 
-      query || '(none)',
+      query ? `"${query}"` : '(none)',
       req.query.types || '(none)',
       req.query.location || '(none)',
       page,
@@ -503,7 +503,7 @@ async function getPlaces(req, res) {
             }
           }
 
-          const radius = parseInt(req.query.radius, 10) || 5000; // 5km por defecto
+          const radius = parseInt(req.query.radius, 10) || 10000; // 10km por defecto
           const typesParam = req.query.types || req.query.type || '';
           const types = String(typesParam)
             .split(',')
@@ -513,11 +513,11 @@ async function getPlaces(req, res) {
           // Si no hay tipos o es vacío, obtener de todas las categorías relevantes
           const allCategories = types.length === 0;
           const categoriesToFetch = allCategories 
-            ? ['tourist_attraction', 'cafe', 'restaurant', 'bar', 'lodging', 'museum']
+            ? ['tourist_attraction', 'restaurant', 'lodging', 'cafe', 'bar', 'museum']
             : types;
 
-          console.log('[🗺️ EXPLORER] 📍 Location: %s,%s | Radius: %dm | Types: %s | AllCategories: %s', 
-            lat, lng, radius, categoriesToFetch.join(', '), allCategories
+          console.log('[🗺️ EXPLORER] 📍 Location: %s,%s | Radius: %dm | Types: %s | AllCategories: %s | Query: %s', 
+            lat, lng, radius, categoriesToFetch.join(', '), allCategories, query || '(none)'
           );
 
           const pageToken = req.query.page_token
@@ -528,17 +528,32 @@ async function getPlaces(req, res) {
 
           // Consultar por cada tipo/categoría
           const requests = categoriesToFetch.map((type) => {
-            let url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=${encodeURIComponent(
-              type
-            )}&key=${GOOGLE_PLACES_API_KEY}${pageToken}`;
+            let url;
             
-            // Si hay query de búsqueda, agregar keyword
-            if (query) {
-              url += `&keyword=${encodeURIComponent(query)}`;
+            // Si hay query text, usar textsearch que es más flexible
+            if (query && query.length > 2) {
+              const searchQuery = `${query} ${type.replace('_', ' ')} in Cusco Peru`;
+              url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+                searchQuery
+              )}&location=${lat},${lng}&radius=${radius}&key=${GOOGLE_PLACES_API_KEY}${pageToken}`;
+            } else {
+              // Sin query text, usar nearbysearch con keyword genérico del tipo
+              const keywords = {
+                'tourist_attraction': 'attraction tourist cusco',
+                'restaurant': 'restaurant food cusco',
+                'lodging': 'hotel hostel accommodation cusco',
+                'cafe': 'cafe coffee cusco',
+                'bar': 'bar pub cusco',
+                'museum': 'museum gallery cusco'
+              };
+              const keyword = keywords[type] || type;
+              url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=${encodeURIComponent(
+                type
+              )}&keyword=${encodeURIComponent(keyword)}&key=${GOOGLE_PLACES_API_KEY}${pageToken}`;
             }
             
             return axios
-              .get(url, { timeout: 8000 })
+              .get(url, { timeout: 10000 })
               .then((r) => ({ type, data: r.data }))
               .catch((err) => ({ type, error: err }));
           });
