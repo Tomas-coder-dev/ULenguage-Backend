@@ -286,6 +286,24 @@ async function persistPlacesToDb(placesFromPlaces) {
 }
 
 /**
+ * Helper: calcula la distancia en metros entre dos puntos geográficos usando la fórmula de Haversine
+ */
+function calculateDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371e3; // Radio de la Tierra en metros
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distancia en metros
+}
+
+/**
  * GET /api/explorer
  *
  * source=db:
@@ -294,6 +312,12 @@ async function persistPlacesToDb(placesFromPlaces) {
  *   - usa solo Google Places
  * source=both o vacío:
  *   - intenta combinar BD + Google Places (si hay GOOGLE_PLACES_API_KEY)
+ *
+ * Parámetros adicionales:
+ *   - page: número de página (default 1)
+ *   - limit: cantidad de resultados por página (default 15)
+ *   - sortBy: 'distance' | 'rating' (default: distance para Places, rating para DB)
+ *   - location: lat,lng del usuario (si no se envía, usa centro de Cusco)
  */
 async function getPlaces(req, res) {
   try {
@@ -301,12 +325,21 @@ async function getPlaces(req, res) {
     const query = req.query.query
       ? req.query.query.toString().toLowerCase()
       : null;
+    
+    // Paginación
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 15;
+    const skip = (page - 1) * limit;
+    const sortBy = (req.query.sortBy || '').toString().toLowerCase() || 'distance';
 
-    console.log('[🗺️ EXPLORER] REQUEST → source=%s, query=%s, types=%s, location=%s', 
+    console.log('[🗺️ EXPLORER] REQUEST → source=%s, query=%s, types=%s, location=%s, page=%d, limit=%d, sortBy=%s', 
       source || '(none)', 
       query || '(none)',
       req.query.types || '(none)',
-      req.query.location || '(none)'
+      req.query.location || '(none)',
+      page,
+      limit,
+      sortBy
     );
 
     const hasPlacesKey = !!GOOGLE_PLACES_API_KEY;
@@ -329,7 +362,36 @@ async function getPlaces(req, res) {
     // ---- 1) Flujo BD (Zone), si se desea ----
     const dbPromise = wantDb
       ? (async () => {
+          // Punto de referencia: si el usuario envía location, lo usamos; si no, centro de Cusco
+          let refLat = -13.5319;
+          let refLng = -71.9675;
+          if (req.query.location) {
+            const parts = String(req.query.location).split(',');
+            if (parts.length === 2) {
+              const a = parseFloat(parts[0]);
+              const b = parseFloat(parts[1]);
+              if (!isNaN(a) && !isNaN(b)) {
+                refLat = a;
+                refLng = b;
+              }
+            }
+          }
+
           let filter = { active: true };
+          
+          // Filtro por tipos/categorías
+          const typesParam = req.query.types || req.query.type;
+          if (typesParam) {
+            const types = String(typesParam)
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
+            if (types.length > 0) {
+              filter.category = { $in: types };
+            }
+          }
+
+          // Filtro por query text
           if (query) {
             filter.$or = [
               { name_es: { $regex: query, $options: 'i' } },
@@ -342,10 +404,41 @@ async function getPlaces(req, res) {
 
           const zones = await Zone.find(filter)
             .select('-__v -created_at -updated_at -qr_code')
-            .sort({ rating: -1, reviewsCount: -1 })
             .lean();
 
-          const places = zones.map((zone) => ({
+          // Calcular distancia a cada lugar
+          const zonesWithDistance = zones
+            .map((zone) => {
+              if (!Array.isArray(zone.coordinates) || zone.coordinates.length < 2) {
+                return { ...zone, distance: 999999 };
+              }
+              const [lng, lat] = zone.coordinates;
+              const dist = calculateDistance(refLat, refLng, lat, lng);
+              return { ...zone, distance: dist };
+            })
+            .filter((z) => z.distance < 10000); // Máximo 10km del punto de referencia
+
+          // Ordenar según sortBy
+          let sorted = [];
+          if (sortBy === 'rating') {
+            sorted = zonesWithDistance.sort((a, b) => {
+              const ratingDiff = (b.rating || 0) - (a.rating || 0);
+              if (ratingDiff !== 0) return ratingDiff;
+              return (a.distance || 0) - (b.distance || 0);
+            });
+          } else {
+            // sortBy === 'distance' o default
+            sorted = zonesWithDistance.sort((a, b) => {
+              const distDiff = (a.distance || 0) - (b.distance || 0);
+              if (distDiff !== 0) return distDiff;
+              return (b.rating || 0) - (a.rating || 0);
+            });
+          }
+
+          // Aplicar paginación
+          const paginated = sorted.slice(skip, skip + limit);
+
+          const places = paginated.map((zone) => ({
             id: zone._id?.toString(),
             name: zone.name_es || zone.name_en || zone.name || null,
             image: zone.image || null,
@@ -381,22 +474,23 @@ async function getPlaces(req, res) {
             opening_hours: zone.opening_hours || null,
             website: zone.website || null,
             photos: zone.photos || [],
+            distance: zone.distance,
             source: 'db',
           }));
 
-          console.log(`[🗺️ EXPLORER] Lugares obtenidos de BD: ${places.length}`);
-          return places;
+          console.log(`[🗺️ EXPLORER] Lugares obtenidos de BD: ${places.length} (total: ${sorted.length})`);
+          return { places, total: sorted.length };
         })()
-      : Promise.resolve([]);
+      : Promise.resolve({ places: [], total: 0 });
 
     // ---- 2) Flujo Google Places, si se desea y hay API key ----
     const placesPromise = wantPlaces
       ? (async () => {
           console.log('[🗺️ EXPLORER] 🌍 Consultando Google Places API...');
           
-          // Ubicación por defecto (Cusco centro)
-          let lat = -13.53195;
-          let lng = -71.967463;
+          // Ubicación: usuario o centro de Cusco
+          let lat = -13.5319;
+          let lng = -71.9675;
           if (req.query.location) {
             const parts = String(req.query.location).split(',');
             if (parts.length === 2) {
@@ -409,30 +503,40 @@ async function getPlaces(req, res) {
             }
           }
 
-          const radius = parseInt(req.query.radius, 10) || 3000; // 3km por defecto
-          const typesParam =
-            req.query.types || req.query.type || 'tourist_attraction';
+          const radius = parseInt(req.query.radius, 10) || 5000; // 5km por defecto
+          const typesParam = req.query.types || req.query.type || '';
           const types = String(typesParam)
             .split(',')
             .map((s) => s.trim())
             .filter(Boolean);
-          if (types.length === 0) types.push('tourist_attraction');
+          
+          // Si no hay tipos o es vacío, obtener de todas las categorías relevantes
+          const allCategories = types.length === 0;
+          const categoriesToFetch = allCategories 
+            ? ['tourist_attraction', 'cafe', 'restaurant', 'bar', 'lodging', 'museum']
+            : types;
 
-          console.log('[🗺️ EXPLORER] 📍 Location: %s,%s | Radius: %dm | Types: %s', 
-            lat, lng, radius, types.join(', ')
+          console.log('[🗺️ EXPLORER] 📍 Location: %s,%s | Radius: %dm | Types: %s | AllCategories: %s', 
+            lat, lng, radius, categoriesToFetch.join(', '), allCategories
           );
 
           const pageToken = req.query.page_token
             ? `&pagetoken=${encodeURIComponent(req.query.page_token)}`
             : '';
-          const wantDetails =
-            String(req.query.details || 'true').toLowerCase() === 'true';
-          const detailsCount = parseInt(req.query.details_count, 10) || 15;
+          const wantDetails = String(req.query.details || 'true').toLowerCase() === 'true';
+          const detailsCount = parseInt(req.query.details_count, 10) || limit;
 
-          const requests = types.map((type) => {
-            const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=${encodeURIComponent(
+          // Consultar por cada tipo/categoría
+          const requests = categoriesToFetch.map((type) => {
+            let url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=${encodeURIComponent(
               type
             )}&key=${GOOGLE_PLACES_API_KEY}${pageToken}`;
+            
+            // Si hay query de búsqueda, agregar keyword
+            if (query) {
+              url += `&keyword=${encodeURIComponent(query)}`;
+            }
+            
             return axios
               .get(url, { timeout: 8000 })
               .then((r) => ({ type, data: r.data }))
@@ -441,8 +545,9 @@ async function getPlaces(req, res) {
 
           const responses = await Promise.allSettled(requests);
 
-          let combinedResults = [];
+          let resultsByCategory = new Map();
           let nextPageToken = null;
+          
           for (const respWrap of responses) {
             if (respWrap.status !== 'fulfilled') {
               console.warn(
@@ -464,18 +569,71 @@ async function getPlaces(req, res) {
             }
             const data = resp.data || {};
             const results = Array.isArray(data.results) ? data.results : [];
-            combinedResults = combinedResults.concat(results);
+            
+            // Agrupar por categoría
+            if (!resultsByCategory.has(resp.type)) {
+              resultsByCategory.set(resp.type, []);
+            }
+            resultsByCategory.get(resp.type).push(...results);
+            
             if (!nextPageToken && data.next_page_token) {
               nextPageToken = data.next_page_token;
             }
           }
 
-          // Nearby Search ya devuelve por distancia al location
+          // Aplicar límite según estrategia: si "Todos", 5 por categoría; si específico, 15
+          let combinedResults = [];
+          if (allCategories) {
+            // Tomar 5 de cada categoría disponible
+            for (const [category, results] of resultsByCategory.entries()) {
+              const limited = results.slice(0, 5);
+              combinedResults = combinedResults.concat(limited);
+              console.log(`[🗺️ EXPLORER] Categoría "${category}": ${limited.length} lugares`);
+            }
+          } else {
+            // Tomar todos los resultados y luego paginar
+            for (const results of resultsByCategory.values()) {
+              combinedResults = combinedResults.concat(results);
+            }
+          }
+
+          // Deduplicar y ordenar por distancia o rating
           const uniquePlaces = dedupePlaces(combinedResults);
+          
+          // Calcular distancia a cada lugar
+          const placesWithDistance = uniquePlaces.map((place) => {
+            const placeLat = place.geometry?.location?.lat;
+            const placeLng = place.geometry?.location?.lng;
+            if (placeLat == null || placeLng == null) {
+              return { ...place, distance: 999999 };
+            }
+            const dist = calculateDistance(lat, lng, placeLat, placeLng);
+            return { ...place, distance: dist };
+          });
+
+          // Ordenar según sortBy
+          let sorted = [];
+          if (sortBy === 'rating') {
+            sorted = placesWithDistance.sort((a, b) => {
+              const ratingDiff = (b.rating || 0) - (a.rating || 0);
+              if (ratingDiff !== 0) return ratingDiff;
+              return (a.distance || 0) - (b.distance || 0);
+            });
+          } else {
+            // sortBy === 'distance' o default (Nearby ya ordena por distancia)
+            sorted = placesWithDistance.sort((a, b) => {
+              const distDiff = (a.distance || 0) - (b.distance || 0);
+              if (distDiff !== 0) return distDiff;
+              return (b.rating || 0) - (a.rating || 0);
+            });
+          }
+
+          // Aplicar paginación solo si no es "Todos"
+          const paginated = allCategories ? sorted : sorted.slice(skip, skip + limit);
 
           // IA para descripciones
           const maxIaDescriptions = 30;
-          const placesToDescribe = uniquePlaces.slice(0, maxIaDescriptions);
+          const placesToDescribe = paginated.slice(0, maxIaDescriptions);
 
           await Promise.allSettled(
             placesToDescribe.map(async (place) => {
@@ -545,7 +703,7 @@ async function getPlaces(req, res) {
 
           let detailsMap = new Map();
           if (wantDetails) {
-            const toDetails = uniquePlaces.slice(0, detailsCount);
+            const toDetails = paginated.slice(0, detailsCount);
             const detailsResults = await Promise.allSettled(
               toDetails.map((p) => fetchPlaceDetails(p.place_id))
             );
@@ -558,7 +716,7 @@ async function getPlaces(req, res) {
             });
           }
 
-          const payloadPlaces = uniquePlaces.map((place) => {
+          const payloadPlaces = paginated.map((place) => {
             const placeKey = (
               place.place_id ||
               place.name ||
@@ -638,20 +796,26 @@ async function getPlaces(req, res) {
                 (Array.isArray(place.types) ? place.types : []),
               has_parking: details ? !!details.has_parking : null,
               reviewsCount: place.user_ratings_total,
+              distance: place.distance,
               description,
               source: 'places',
             };
           });
 
-          console.log('[🗺️ EXPLORER] 🌍 Google Places devolvió %d lugares', payloadPlaces.length);
-          return payloadPlaces;
+          console.log('[🗺️ EXPLORER] 🌍 Google Places devolvió %d lugares (total: %d)', payloadPlaces.length, sorted.length);
+          return { places: payloadPlaces, total: sorted.length, nextPageToken };
         })()
-      : Promise.resolve([]);
+      : Promise.resolve({ places: [], total: 0, nextPageToken: null });
 
-    const [placesFromDb, placesFromPlaces] = await Promise.all([
+    const [dbResult, placesResult] = await Promise.all([
       dbPromise,
       placesPromise,
     ]);
+
+    const placesFromDb = dbResult.places || [];
+    const placesFromPlaces = placesResult.places || [];
+    const totalDb = dbResult.total || 0;
+    const totalPlaces = placesResult.total || 0;
 
     // Persistir nuevos lugares de Google Places a MongoDB (en background, no bloqueante)
     if (placesFromPlaces.length > 0) {
@@ -664,10 +828,16 @@ async function getPlaces(req, res) {
     }
 
     const allPlaces = [...placesFromDb, ...placesFromPlaces];
+    const totalResults = totalDb + totalPlaces;
+    const hasMore = (page * limit) < totalResults;
 
     return res.json({
       places: allPlaces,
-      next_page_token: null, // si quieres usar paginación de Places, aquí puedes devolver el token
+      page,
+      limit,
+      total: totalResults,
+      hasMore,
+      next_page_token: placesResult.nextPageToken || null,
     });
   } catch (error) {
     console.error(
