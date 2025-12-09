@@ -302,6 +302,13 @@ async function getPlaces(req, res) {
       ? req.query.query.toString().toLowerCase()
       : null;
 
+    console.log('[🗺️ EXPLORER] REQUEST → source=%s, query=%s, types=%s, location=%s', 
+      source || '(none)', 
+      query || '(none)',
+      req.query.types || '(none)',
+      req.query.location || '(none)'
+    );
+
     const hasPlacesKey = !!GOOGLE_PLACES_API_KEY;
 
     const wantDb =
@@ -314,6 +321,10 @@ async function getPlaces(req, res) {
         source === 'both' ||
         (!source && hasPlacesKey)) &&
       hasPlacesKey;
+
+    console.log('[🗺️ EXPLORER] DECISION → wantDb=%s, wantPlaces=%s (hasKey=%s)', 
+      wantDb, wantPlaces, hasPlacesKey
+    );
 
     // ---- 1) Flujo BD (Zone), si se desea ----
     const dbPromise = wantDb
@@ -381,6 +392,8 @@ async function getPlaces(req, res) {
     // ---- 2) Flujo Google Places, si se desea y hay API key ----
     const placesPromise = wantPlaces
       ? (async () => {
+          console.log('[🗺️ EXPLORER] 🌍 Consultando Google Places API...');
+          
           // Ubicación por defecto (Cusco centro)
           let lat = -13.53195;
           let lng = -71.967463;
@@ -404,6 +417,10 @@ async function getPlaces(req, res) {
             .map((s) => s.trim())
             .filter(Boolean);
           if (types.length === 0) types.push('tourist_attraction');
+
+          console.log('[🗺️ EXPLORER] 📍 Location: %s,%s | Radius: %dm | Types: %s', 
+            lat, lng, radius, types.join(', ')
+          );
 
           const pageToken = req.query.page_token
             ? `&pagetoken=${encodeURIComponent(req.query.page_token)}`
@@ -626,6 +643,7 @@ async function getPlaces(req, res) {
             };
           });
 
+          console.log('[🗺️ EXPLORER] 🌍 Google Places devolvió %d lugares', payloadPlaces.length);
           return payloadPlaces;
         })()
       : Promise.resolve([]);
