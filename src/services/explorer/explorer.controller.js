@@ -487,6 +487,7 @@ async function getPlaces(req, res) {
     const placesPromise = wantPlaces
       ? (async () => {
           console.log('[🗺️ EXPLORER] 🌍 Consultando Google Places API...');
+          console.log('[🗺️ EXPLORER] 🔑 API Key present:', !!GOOGLE_PLACES_API_KEY, '| Length:', GOOGLE_PLACES_API_KEY?.length || 0);
           
           // Ubicación: usuario o centro de Cusco
           let lat = -13.5319;
@@ -536,6 +537,7 @@ async function getPlaces(req, res) {
               url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
                 searchQuery
               )}&location=${lat},${lng}&radius=${radius}&key=${GOOGLE_PLACES_API_KEY}${pageToken}`;
+              console.log(`[🗺️ EXPLORER] 🔍 TextSearch URL (${type}): ${url.replace(GOOGLE_PLACES_API_KEY, 'API_KEY_HIDDEN')}`);
             } else {
               // Sin query text, usar nearbysearch con keyword genérico del tipo
               const keywords = {
@@ -550,12 +552,25 @@ async function getPlaces(req, res) {
               url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=${encodeURIComponent(
                 type
               )}&keyword=${encodeURIComponent(keyword)}&key=${GOOGLE_PLACES_API_KEY}${pageToken}`;
+              console.log(`[🗺️ EXPLORER] 🔍 NearbySearch URL (${type}): ${url.replace(GOOGLE_PLACES_API_KEY, 'API_KEY_HIDDEN')}`);
             }
             
             return axios
               .get(url, { timeout: 10000 })
-              .then((r) => ({ type, data: r.data }))
-              .catch((err) => ({ type, error: err }));
+              .then((r) => {
+                console.log(`[🗺️ EXPLORER] ✅ Response for ${type}: status=${r.data.status}, results=${r.data.results?.length || 0}`);
+                if (r.data.status !== 'OK' && r.data.status !== 'ZERO_RESULTS') {
+                  console.error(`[🗺️ EXPLORER] ⚠️ API Error for ${type}: ${r.data.status} - ${r.data.error_message || 'No error message'}`);
+                }
+                return { type, data: r.data };
+              })
+              .catch((err) => {
+                console.error(`[🗺️ EXPLORER] ❌ Request failed for ${type}: ${err.message}`);
+                if (err.response) {
+                  console.error(`[🗺️ EXPLORER] Response status: ${err.response.status}, data:`, err.response.data);
+                }
+                return { type, error: err };
+              });
           });
 
           const responses = await Promise.allSettled(requests);
