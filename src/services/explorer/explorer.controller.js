@@ -201,6 +201,91 @@ async function fetchPlaceDetails(placeId) {
 }
 
 /**
+ * Helper: persiste lugares de Google Places en Zone (MongoDB) si son nuevos.
+ * Deduplica por place_id; no inserta si ya existe.
+ */
+async function persistPlacesToDb(placesFromPlaces) {
+  if (!Array.isArray(placesFromPlaces) || placesFromPlaces.length === 0) {
+    return;
+  }
+
+  try {
+    const placeIds = placesFromPlaces
+      .map((p) => p.id)
+      .filter((id) => id != null);
+    if (placeIds.length === 0) return;
+
+    // Buscar cuáles ya existen en la BD por google_place_id
+    const existing = await Zone.find({
+      google_place_id: { $in: placeIds },
+    })
+      .select('google_place_id')
+      .lean();
+    const existingSet = new Set(
+      existing.map((z) => z.google_place_id).filter(Boolean)
+    );
+
+    const newPlaces = placesFromPlaces.filter(
+      (p) => p.id && !existingSet.has(p.id)
+    );
+
+    if (newPlaces.length === 0) {
+      console.log(
+        '[🗺️ EXPLORER] Todos los lugares de Places ya existen en BD.'
+      );
+      return;
+    }
+
+    // Construir documentos Zone a insertar
+    const docs = newPlaces.map((p) => ({
+      google_place_id: p.id,
+      name: p.name || 'Sin nombre',
+      name_es: p.name || 'Sin nombre',
+      name_en: p.name || 'Unnamed',
+      description_es: p.description?.es || '',
+      description_en: p.description?.en || '',
+      description_qu: p.description?.qu || '',
+      fullDescription: p.description || { es: '', en: '', qu: '' },
+      category: p.category || 'tourist_attraction',
+      coordinates:
+        p.location?.lng != null && p.location?.lat != null
+          ? [p.location.lng, p.location.lat]
+          : null,
+      rating: p.rating || null,
+      reviewsCount: p.reviewsCount || 0,
+      address: p.address || p.vicinity || '',
+      phone: p.phone || null,
+      opening_hours: p.opening_hours || null,
+      website: p.website || null,
+      photos: p.photos || [],
+      image:
+        Array.isArray(p.photos) && p.photos.length > 0
+          ? p.photos[0].url || null
+          : null,
+      active: true,
+    }));
+
+    await Zone.insertMany(docs, { ordered: false });
+    console.log(
+      `[🗺️ EXPLORER] Insertados ${docs.length} nuevos lugares de Google Places a BD.`
+    );
+  } catch (err) {
+    // insertMany con ordered:false continúa tras duplicados; si hay error 11000 (duplicate key) lo ignoramos parcialmente
+    if (err.code === 11000 || err.writeErrors) {
+      const inserted = err.result?.nInserted || 0;
+      console.warn(
+        `[🗺️ EXPLORER] Insertados ${inserted} lugares; algunos ya existían (duplicados ignorados).`
+      );
+    } else {
+      console.error(
+        '[🗺️ EXPLORER] Error al persistir lugares de Places:',
+        err?.message || err
+      );
+    }
+  }
+}
+
+/**
  * GET /api/explorer
  *
  * source=db:
@@ -549,6 +634,16 @@ async function getPlaces(req, res) {
       dbPromise,
       placesPromise,
     ]);
+
+    // Persistir nuevos lugares de Google Places a MongoDB (en background, no bloqueante)
+    if (placesFromPlaces.length > 0) {
+      persistPlacesToDb(placesFromPlaces).catch((err) => {
+        console.warn(
+          '[🗺️ EXPLORER] Persistencia en background falló:',
+          err?.message || err
+        );
+      });
+    }
 
     const allPlaces = [...placesFromDb, ...placesFromPlaces];
 

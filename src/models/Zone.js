@@ -7,6 +7,16 @@ const ZoneSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
+  google_place_id: {
+    type: String,
+    unique: true,
+    sparse: true, // permite múltiples null pero place_id únicos
+    index: true
+  },
+  name: {
+    type: String,
+    default: ''
+  },
   name_es: { 
     type: String, 
     required: true 
@@ -60,7 +70,7 @@ const ZoneSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['archaeological', 'natural', 'cultural', 'religious', 'urban'],
+    enum: ['archaeological', 'natural', 'cultural', 'religious', 'urban', 'tourist_attraction', 'lodging', 'restaurant', 'cafe', 'bar', 'museum', 'hotel'],
     default: 'cultural'
   },
   difficulty: {
@@ -73,10 +83,31 @@ const ZoneSchema = new mongoose.Schema({
     default: ''
   },
   reward_content: {
-    badge: { type: String, required: true },
-    phrase: { type: String, required: true },
+    badge: { type: String, required: false },
+    phrase: { type: String, required: false },
     audio_url: { type: String, default: '' },
     discount: { type: Number, default: 0 }
+  },
+  // Campos adicionales de Google Places
+  address: {
+    type: String,
+    default: ''
+  },
+  phone: {
+    type: String,
+    default: ''
+  },
+  opening_hours: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
+  website: {
+    type: String,
+    default: ''
+  },
+  photos: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: []
   },
   active: {
     type: Boolean,
