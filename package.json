@@ -1,11 +1,11 @@
 {
   "name": "ulenguage-backend",
   "version": "1.0.0",
-  "description": "Backend de ULenguage - Traducción quechua para turistas con OCR",
+  "description": "Backend de ULenguage - Traducci\u00f3n quechua para turistas con OCR",
   "main": "src/app.js",
   "scripts": {
-    "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
+    "start": "node init && node src/app.js",
+    "dev": "node init && nodemon src/app.js",
     "test": "jest --coverage",
     "seed": "node -e \"const connectDB = require('./src/config/db'); const { runAllSeeders } = require('./src/seeders'); connectDB().then(() => runAllSeeders()).then(() => { console.log('Proceso completado'); process.exit(0); }).catch(err => { console.error(err); process.exit(1); })\""
   },
