@@ -129,10 +129,18 @@ async function translateTextHybridDetailed(text, sourceLanguage, targetLanguage)
     try {
       const glosbeResults = await scrapeGlosbe(source, target, variant);
       if (Array.isArray(glosbeResults) && glosbeResults.length > 0) {
-        // prefer exact match (case-insensitive) else first
-        const exact = glosbeResults.find(r => r.toLowerCase() === variant.toLowerCase());
-        const chosen = exact || glosbeResults[0];
-        const candidates = glosbeResults.map(v => ({ value: v, provider: 'glosbe' }));
+        // Filter out candidates that are identical to the query (case-insensitive)
+        const filtered = glosbeResults.filter(r => r.toLowerCase().trim() !== String(variant).toLowerCase().trim());
+        // If after filtering we have valid candidates, prefer exact match else first
+        const candidatesList = filtered.length > 0 ? filtered : glosbeResults;
+        const exact = candidatesList.find(r => r.toLowerCase() === variant.toLowerCase());
+        const chosen = exact || candidatesList[0];
+        const candidates = candidatesList.map(v => ({ value: v, provider: 'glosbe' }));
+        // If the chosen candidate equals the variant (no real translation), skip and continue
+        if (String(chosen).toLowerCase().trim() === String(variant).toLowerCase().trim()) {
+          // continue to next variant
+          continue;
+        }
         return { translation: chosen, source: 'glosbe', candidates, variantUsed: variant };
       }
     } catch (err) {
