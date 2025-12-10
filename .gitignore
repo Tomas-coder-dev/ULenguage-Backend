@@ -5,3 +5,6 @@ coverage/
 dist/
 logs/
 google-credentials.json
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
