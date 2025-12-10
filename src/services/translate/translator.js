@@ -130,17 +130,44 @@ async function translateTextHybridDetailed(text, sourceLanguage, targetLanguage)
       const glosbeResults = await scrapeGlosbe(source, target, variant);
       if (Array.isArray(glosbeResults) && glosbeResults.length > 0) {
         // Filter out candidates that are identical to the query (case-insensitive)
-        const filtered = glosbeResults.filter(r => r.toLowerCase().trim() !== String(variant).toLowerCase().trim());
-        // If after filtering we have valid candidates, prefer exact match else first
+        let filtered = glosbeResults.filter(r => r.toLowerCase().trim() !== String(variant).toLowerCase().trim());
+
+        // Remove obvious noise coming from the site (brand, UI labels) or too-short tokens
+        filtered = filtered.filter(r => {
+          if (!r) return false;
+          const low = r.toLowerCase().trim();
+          if (low.includes('glosbe') || low.includes('translate') || low.includes('tradu')) return false;
+          // discard entries with less than 2 letters or mostly non-letter content
+          const letters = (low.match(/[a-záéíóúñü\w]/gi) || []).length;
+          if (letters < 2) return false;
+          // discard if it's purely punctuation or digits
+          if (!/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(low)) return false;
+          return true;
+        });
+
+        // If after filtering we have valid candidates, use them; else fall back to raw results
         const candidatesList = filtered.length > 0 ? filtered : glosbeResults;
+
+        // If candidatesList still contains only noise (e.g., 'glosbe'), skip this variant
+        const onlyNoise = candidatesList.every(r => {
+          const low = String(r).toLowerCase();
+          return low.includes('glosbe') || low.trim().length === 0;
+        });
+        if (onlyNoise) {
+          const { warn } = require('../../utils/logger');
+          warn('translateTextHybridDetailed: Glosbe returned only noisy candidates for variant "%s": %o', variant, glosbeResults);
+          continue; // try next variant
+        }
+
         const exact = candidatesList.find(r => r.toLowerCase() === variant.toLowerCase());
         const chosen = exact || candidatesList[0];
         const candidates = candidatesList.map(v => ({ value: v, provider: 'glosbe' }));
+
         // If the chosen candidate equals the variant (no real translation), skip and continue
         if (String(chosen).toLowerCase().trim() === String(variant).toLowerCase().trim()) {
-          // continue to next variant
           continue;
         }
+
         return { translation: chosen, source: 'glosbe', candidates, variantUsed: variant };
       }
     } catch (err) {
